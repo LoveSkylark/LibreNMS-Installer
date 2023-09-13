@@ -77,7 +77,7 @@ sudo mkdir -p "$LNMS_DIR/chart"
 sudo git clone https://github.com/LoveSkylark/LibreNMS-Helm.git "$LNMS_DIR/chart/LibreNMS-Helm"
 sudo git clone https://github.com/LoveSkylark/LibreNMS-Installer.git "$LNMS_DIR/installer"
 if [ ! -f "$LNMS_DIR/lnms-config.yaml" ]; then
-    sudo cp "$LNMS_DIR/installer/lnms-config.yaml" "$LNMS_DIR/lnms-config.yaml"
+    sudo cp "$LNMS_DIR/installer/config/lnms-config.yaml" "$LNMS_DIR/lnms-config.yaml"
 fi
 echo ""
 
