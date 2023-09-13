@@ -1,0 +1,87 @@
+#########################################################
+##  Edit this file to configure the monitoring cluster ##
+##  whole configuration template can be found under:   ##
+##        LibreNMS-Helm/librenms/values.yaml           ##
+#########################################################
+
+global:
+  TZ: "Atlantic/Reykjavik"
+
+Company:
+   name: "TEST CO"
+
+storage:
+  path: "/data/"
+
+application:
+  host:
+    FQDN: "nms.test.local"
+    volumeSize: "20Gi"
+  SNMPcommunity: 
+    - "community-string-1"
+    - "community-string-2"
+  dispatcher:
+    # 1 replica per 100 devices
+    replicas: "1"
+
+mariadb:
+  credentials:
+    rootPassword: "fooRootPassword"
+    user: "foo"
+    password: "bar"
+
+msmtpd:
+  enable: true
+  host:
+    name: "msmtpd"
+    FQDN: "smtp.gmail.com"
+    port: "587"
+  from: "foo@gmail.com"
+  credentials:
+    email:
+      user: "foo"
+      password: "bar"   
+
+smokeping:
+  enable: false
+  host:
+    FQDN: "smokeping.test.local"
+
+oxidized:
+  enable: true
+  host:
+    FQDN: "ox.test.local"
+  credentials:
+    token: "API-token-generated-inside-LIBRE"
+    
+  # Device can be grouped by as string in device NOTE or DESCRIPTION
+  group:
+    core:
+      user: "deviceuser"
+      password: "devicepassword"
+    one:
+      user: ""
+      password: ""
+      string: "/^ox-group-1/"
+    two:
+      user: ""
+      password: ""
+      string: "/^ox-group-2/"
+    three:
+      user: ""
+      password: ""
+      string: "/^ox-group-3/"
+    four:
+      user: ""
+      password: ""
+      string: "/^ox-group-4/"
+    five:
+      user: ""
+      password: ""
+      string: "/^ox-group-5/"
+
+xmatters:
+  enable: false
+  URL: "company.xmatters.com"
+  APIkey: ""
+  APIsecret: ""
