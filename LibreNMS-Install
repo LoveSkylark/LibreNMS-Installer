@@ -62,9 +62,6 @@ echo "################## Adding aliases for KUBE & HELM ##################"
 echo "This step sets up convenient aliases for managing Kubernetes and Helm."
 echo ""
 sudo cp $LNMS_DIR/installer/profile.d/* /etc/profile.d/
-for file in $LNMS_DIR/installer/profile.d/*; do
-    source "$file"
-done
 echo ""
 
 
@@ -78,9 +75,10 @@ echo ""
 echo "################## Installation Complete ##################"
 echo "LibreNMS cluster is installed and configured successfully."
 echo ""
-echo "To manage the Kubernetes cluster, use the 'kubectl' command."
-echo "To manage Helm, use the 'helm' command."
-echo "To access the LibreNMS web interface, go to http://<your_ip>"
-echo "To access the K9s dashboard, run 'sudo k9s' in the terminal."
-echo "To edit the LibreNMS cluster configuration, run 'nms edit'"
-echo "To add additional devices to LibreNMS, use the 'lnms device:add' command."
+echo "Run 'nms install' to configur and start up the cluster"
+/bin/bash
+echo "$LNMS_DIR"
+for file in $LNMS_DIR/installer/profile.d/*; do
+    source "$file"
+    echo "file"
+done
