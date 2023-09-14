@@ -60,14 +60,14 @@ echo ""
 echo "################## Adding aliases for KUBE & HELM ##################"
 echo "This step sets up convenient aliases for managing Kubernetes and Helm."
 echo ""
-sudo cp -r "$LNMS_DIR/installer/profile.d/" /etc/profile.d/
+sudo cp -r "$LNMS_DIR/installer/profile.d/*" /etc/profile.d/
 echo ""
 
 
 echo "################## Setting up SNMP for LibreNMS ##################"
 echo "This step configures SNMP for LibreNMS monitoring."
 echo ""
-sudo cp -r "$LNMS_DIR/installer/snmpd.conf.d/" /etc/snmp/snmpd.conf.d
+sudo cp -r "$LNMS_DIR/installer/snmpd.conf.d/*" /etc/snmp/snmpd.conf.d
 sudo systemctl restart snmpd
 echo ""
 
@@ -80,4 +80,3 @@ echo "To access the LibreNMS web interface, go to http://<your_ip>"
 echo "To access the K9s dashboard, run 'sudo k9s' in the terminal."
 echo "To edit the LibreNMS cluster configuration, run 'nms edit'"
 echo "To add additional devices to LibreNMS, use the 'lnms device:add' command."
-echo "
