@@ -6,7 +6,7 @@ LNMS_DIR="${LNMS_DIR:-/data}"
 
 # Start of the script
 echo "################## Updating Linux ##################"
-DEBIAN_FRONTEND=noninteractive
+export DEBIAN_FRONTEND=noninteractive
 sudo apt update && sudo apt upgrade -y
 
 
