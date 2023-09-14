@@ -85,7 +85,7 @@ nms() {
 
         "start")
 
-            if kubectl get deployment librenms; then
+            if kubectl get deployment librenms 2>/dev/null; then
                 echo "LibreNMS already installed, skipping." 
                 return 
             fi
@@ -139,7 +139,7 @@ nms() {
 
         *)
 
-            echo "Usage: $0 {edit|update|install|map|help}"
+            echo "Usage: $0 {edit|update|start|map|help}"
             return 1
             ;;
     esac
