@@ -61,6 +61,9 @@ echo "################## Adding aliases for KUBE & HELM ##################"
 echo "This step sets up convenient aliases for managing Kubernetes and Helm."
 echo ""
 sudo cp $LNMS_DIR/installer/profile.d/* /etc/profile.d/
+for file in $LNMS_DIR/installer/profile.d/*; do
+    source "$file"
+done
 echo ""
 
 
