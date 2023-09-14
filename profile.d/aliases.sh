@@ -83,7 +83,7 @@ nms() {
             fi
             ;;
 
-        "install")
+        "start")
 
             if kubectl get deployment librenms; then
                 echo "LibreNMS already installed, skipping." 
@@ -98,11 +98,12 @@ nms() {
                 local ip_eth=$(/sbin/ip -o -4 addr list eth0 | awk '{print $4}' | cut -d/ -f1)
                 local ip_ens=$(/sbin/ip -o -4 addr list ens160 | awk '{print $4}' | cut -d/ -f1)
 
+                echo "Adding LibreNMS to monitoring..."
                 if [ "$ip_ens" ]; then
-                    echo "Adding $ip_ens to SNMP monitoring..."
+                    echo "   Adding $ip_ens to SNMP..."
                     kubectl exec --namespace=librenms --stdin --tty lnms-dispatcher-0 -- /usr/bin/lnms device:add -2 -c locallibremon -r 1161 -d LibreNMS "$ip_ens" || return 1
                 elif [ "$ip_eth" ]; then
-                    echo "Adding $ip_eth to SNMP monitoring..."
+                    echo "   Adding $ip_eth to SNMP..."
                     kubectl exec --namespace=librenms --stdin --tty lnms-dispatcher-0 -- /usr/bin/lnms device:add -2 -c locallibremon -r 1161 -d LibreNMS "$ip_eth" || return 1
                 else
                     echo "No IP address could be found for SNMP monitoring."

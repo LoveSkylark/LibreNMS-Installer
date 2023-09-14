@@ -75,7 +75,7 @@ echo ""
 echo "################## Installation Complete ##################"
 echo "LibreNMS cluster is installed and configured successfully."
 echo ""
-echo "Run 'nms install' to configur and start up the cluster"
+echo "Run 'nms start' to start the LibreNMS cluster"
 /bin/bash
 echo "$LNMS_DIR"
 for file in $LNMS_DIR/installer/profile.d/*; do
