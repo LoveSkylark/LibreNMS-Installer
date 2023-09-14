@@ -6,8 +6,8 @@ LNMS_DIR="${LNMS_DIR:-/data}"
 
 # Start of the script
 echo "################## Updating Linux ##################"
-sudo apt update 
-sudo DEBIAN_FRONTEND=noninteractive sudo apt upgrade -y
+sudo apt-get update 
+sudo NEEDRESTART_MODE=a apt-get upgrade --yes
 
 
 echo ""
