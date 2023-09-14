@@ -93,6 +93,7 @@ nms() {
             echo "Installing LibreNMS..."
             if [ "$?" -eq 0 ]; then
                 vim -f "$LNMS_DIR/lnms-config.yaml" || return 1
+                echo "Installing LibreNMS  in namespace [librenms] using chart:[$LNMS_DIR/chart/LibreNMS-Helm/] and config:[$LNMS_DIR/lnms-config.yaml]"
                 helm install librenms "$LNMS_DIR/chart/LibreNMS-Helm/" -f "$LNMS_DIR/lnms-config.yaml" || return 1
                 
                 local ip_eth=$(/sbin/ip -o -4 addr list eth0 | awk '{print $4}' | cut -d/ -f1)
