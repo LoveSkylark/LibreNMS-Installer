@@ -6,7 +6,7 @@ LNMS_DIR="${LNMS_DIR:-/data}"
 
 # Start of the script
 echo "################## Updating Linux ##################"
-sudo apt update && sudo apt upgrade -y
+sudo apt update && yes "1-14" | sudo apt upgrade -y
 
 
 echo ""
