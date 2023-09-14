@@ -97,7 +97,7 @@ echo ""
 echo "################## Configuring"LibreNMS Cluster  ##################"
 echo "Please configure your LibreNMS cluster by editing the config.yaml file."
 echo "The config.yaml file is located at: $LNMS_DIR/lnms-config.yaml"
-vim -f "$LNMS_DIR/lnms-config.yaml"
+nano -f "$LNMS_DIR/lnms-config.yaml"
 echo ""
 
 
