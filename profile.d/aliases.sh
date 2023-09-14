@@ -68,8 +68,9 @@ hun() {
 alias lnms="kubectl exec --namespace=librenms --stdin --tty lnms-dispatcher-0 -- /usr/bin/lnms"
 
 nms() {
-    local LNMS_DIR="${LNMS_DIR:-/data}"
     local action="$1"
+    local LNMS_DIR="${LNMS_DIR:-/data}"
+    local KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 
     case "$action" in
         "edit")  
@@ -85,10 +86,6 @@ nms() {
 
         "start")
 
-            LibreClusterInstall() {
-                helm install librenms "$LNMS_DIR/chart/LibreNMS-Helm/" -f "$LNMS_DIR/lnms-config.yaml"
-            }
-
             if kubectl get deployment librenms 2>/dev/null; then
                 echo "LibreNMS already installed, skipping." 
                 return 
@@ -98,7 +95,7 @@ nms() {
             if [ "$?" -eq 0 ]; then
                 vim -f "$LNMS_DIR/lnms-config.yaml" || return 1
                 echo "Installing LibreNMS  in namespace [librenms] using chart:[$LNMS_DIR/chart/LibreNMS-Helm/] and config:[$LNMS_DIR/lnms-config.yaml]"
-                LibreClusterInstall || return 1
+                helm install librenms "$LNMS_DIR/chart/LibreNMS-Helm/" -f "$LNMS_DIR/lnms-config.yaml" || return 1
                 
                 local ip_eth=$(/sbin/ip -o -4 addr list eth0 | awk '{print $4}' | cut -d/ -f1)
                 local ip_ens=$(/sbin/ip -o -4 addr list ens160 | awk '{print $4}' | cut -d/ -f1)
