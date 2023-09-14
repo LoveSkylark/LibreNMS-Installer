@@ -1,5 +1,3 @@
-#!/bin/bash
-
 # Define variables
 K3S_INSTALL_SCRIPT="https://get.k3s.io"
 K9S_INSTALL_SCRIPT="https://webi.sh/k9s"
@@ -8,7 +6,7 @@ LNMS_DIR="${LNMS_DIR:-/data}"
 
 # Function to install LibreNMS cluster
 function LibreClusterInstall() {
-    helm install librenms "$LNMS_DIR/chartLibreNMS-Helm/" -f "$LNMS_DIR/lnms-config.yaml"
+    helm install librenms "$LNMS_DIR/chart/LibreNMS-Helm/" -f "$LNMS_DIR/lnms-config.yaml"
 }
 
 # Function to add LibreNMS IP to SNMP monitoring
