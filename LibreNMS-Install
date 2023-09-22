@@ -61,7 +61,8 @@ echo ""
 echo "################## Adding aliases for KUBE & HELM ##################"
 echo "This step sets up convenient aliases for managing Kubernetes and Helm."
 echo ""
-sudo cp $LNMS_DIR/installer/profile.d/* /etc/profile.d/
+sudo cp $LNMS_DIR/installer/profile.d/aliases.sh /etc/profile.d/aliases.sh
+source /etc/profile.d/aliases.sh
 echo ""
 
 
@@ -77,7 +78,5 @@ echo "LibreNMS cluster is installed and configured successfully."
 echo ""
 echo "Run 'nms start' to start the LibreNMS cluster"
 
-LNMS_DIR="${LNMS_DIR:-/data}"
-for file in $LNMS_DIR/installer/profile.d/*; do
-    source $LNMS_DIR/installer/profile.d/$file
-done
+
+
