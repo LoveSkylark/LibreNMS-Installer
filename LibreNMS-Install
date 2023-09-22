@@ -34,17 +34,12 @@ echo "################## Downloading and installing K9S ##################"
 echo ""
 echo "This step installs K9s, a terminal-based Kubernetes dashboard."
 echo ""
-curl -fsSL "$K9S_INSTALL_SCRIPT" | sudo sh -
 
-# Move k9s binary to the BIN_DIR
-rm -rf /usr/local/bin/k9s
-if [ -f "/root/.local/bin/k9s" ]; then
-    sudo mv -f "/root/.local/bin/k9s" "$BIN_DIR/"
-fi
-if [ -f "/home/$USER/.local/bin/k9s" ]; then
-    sudo mv -f "/home/$USER/.local/bin/k9s" "$BIN_DIR/"
-fi
-echo ""
+# make K9S usable by all users
+curl -fsSL "$K9S_INSTALL_SCRIPT" | sudo sh -
+K9S_PATH=$(readlink -f /usr/local/bin/k9s)
+sudo mv "$K9S_PATH" "/usr/local/bin/k9s"
+sudo chmod +x /usr/local/bin/k9s
 
 echo "################## Downloading and installing Helm ##################"
 echo ""
