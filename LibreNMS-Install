@@ -36,12 +36,13 @@ echo "This step installs K9s, a terminal-based Kubernetes dashboard."
 echo ""
 curl -fsSL "$K9S_INSTALL_SCRIPT" | sudo sh -
 
-# Move k9s binary to the BIN_DIR if it exists
+# Move k9s binary to the BIN_DIR
+rm -rf /usr/local/bin/k9s
 if [ -f "/root/.local/bin/k9s" ]; then
-    sudo mv "/root/.local/bin/k9s" "$BIN_DIR/"
+    sudo mv -f "/root/.local/bin/k9s" "$BIN_DIR/"
 fi
 if [ -f "/home/$USER/.local/bin/k9s" ]; then
-    sudo mv "/home/$USER/.local/bin/k9s" "$BIN_DIR/"
+    sudo mv -f "/home/$USER/.local/bin/k9s" "$BIN_DIR/"
 fi
 echo ""
 
@@ -69,8 +70,7 @@ echo ""
 echo "This step sets up convenient aliases for managing Kubernetes and Helm."
 echo ""
 sudo cp $LNMS_DIR/installer/profile.d/aliases.sh /etc/profile.d/aliases.sh
-# source /etc/profile.d/aliases.sh
-source <(curl -fsSL "https://raw.githubusercontent.com/LoveSkylark/LibreNMS-Installer/main/profile.d/aliases.sh")
+source /etc/profile
 echo ""
 
 
@@ -90,3 +90,4 @@ echo "Run 'nms start' to start the LibreNMS cluster"
 
 
 
+cd 
