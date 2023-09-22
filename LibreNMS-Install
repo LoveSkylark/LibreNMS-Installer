@@ -69,7 +69,7 @@ echo ""
 echo "################## Setting up SNMP for LibreNMS ##################"
 echo "This step configures SNMP for LibreNMS monitoring."
 echo ""
-sudo cp $LNMS_DIR/installer/snmpd.conf.d/* /etc/snmp/snmpd.conf.d
+sudo cp $LNMS_DIR/installer/snmpd.conf.d/snmp.conf /etc/snmp/snmpd.conf.d/snmp.conf
 sudo systemctl restart snmpd
 echo ""
 

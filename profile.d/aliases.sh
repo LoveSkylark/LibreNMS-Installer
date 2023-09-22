@@ -1,3 +1,6 @@
+
+#!/bin/bash
+
 # Kubectl commands
 
 alias k="kubectl"
