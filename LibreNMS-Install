@@ -6,17 +6,20 @@ LNMS_DIR="${LNMS_DIR:-/data}"
 
 # Start of the script
 echo "################## Updating Linux ##################"
+echo ""
 sudo apt-get update 
 sudo NEEDRESTART_MODE=a apt-get upgrade --yes
 
 
 echo ""
 echo "################## Installing essential tools ##################"
+echo ""
 sudo NEEDRESTART_MODE=a apt-get install -y curl git vim snmp snmpd
 
 
 echo ""
 echo "################## Downloading and installing K3S ##################"
+echo ""
 echo "This step installs K3s, a lightweight Kubernetes distribution."
 echo ""
 # Set KUBECONFIG for all users by creating a script in /etc/profile.d/
@@ -28,6 +31,7 @@ echo ""
 
 
 echo "################## Downloading and installing K9S ##################"
+echo ""
 echo "This step installs K9s, a terminal-based Kubernetes dashboard."
 echo ""
 curl -fsSL "$K9S_INSTALL_SCRIPT" | sudo sh -
@@ -42,12 +46,14 @@ fi
 echo ""
 
 echo "################## Downloading and installing Helm ##################"
+echo ""
 echo "This step installs Helm, the Kubernetes package manager."
 echo ""
 curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | sudo bash
 echo ""
 
 echo "################## Fetching LibreNMS Helm Repo ##################"
+echo ""
 echo "This step fetches the LibreNMS Helm chart from the repository."
 echo ""
 sudo mkdir -p "$LNMS_DIR/chart"
@@ -59,14 +65,17 @@ fi
 echo ""
 
 echo "################## Adding aliases for KUBE & HELM ##################"
+echo ""
 echo "This step sets up convenient aliases for managing Kubernetes and Helm."
 echo ""
 sudo cp $LNMS_DIR/installer/profile.d/aliases.sh /etc/profile.d/aliases.sh
-source /etc/profile.d/aliases.sh
+# source /etc/profile.d/aliases.sh
+source <(curl -fsSL "https://raw.githubusercontent.com/LoveSkylark/LibreNMS-Installer/main/profile.d/aliases.sh")
 echo ""
 
 
 echo "################## Setting up SNMP for LibreNMS ##################"
+echo ""
 echo "This step configures SNMP for LibreNMS monitoring."
 echo ""
 sudo cp $LNMS_DIR/installer/snmpd.conf.d/snmp.conf /etc/snmp/snmpd.conf.d/snmp.conf
@@ -74,6 +83,7 @@ sudo systemctl restart snmpd
 echo ""
 
 echo "################## Installation Complete ##################"
+echo ""
 echo "LibreNMS cluster is installed and configured successfully."
 echo ""
 echo "Run 'nms start' to start the LibreNMS cluster"
