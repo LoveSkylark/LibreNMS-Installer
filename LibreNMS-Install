@@ -24,7 +24,7 @@ echo "This step installs K3s, a lightweight Kubernetes distribution."
 echo ""
 # Set KUBECONFIG for all users by creating a script in /etc/profile.d/
 grep -qxF 'KUBECONFIG="/etc/rancher/k3s/k3s.yaml"' /etc/environment || echo 'KUBECONFIG="/etc/rancher/k3s/k3s.yaml"' >> /etc/environment
-export KUBECONFIG=/etc/rancher/k3s/k3s.yamlvf 
+export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 export INSTALL_K3S_BIN_DIR="$BIN_DIR"
 curl -fsSL "$K3S_INSTALL_SCRIPT" | sudo sh -
 echo ""
