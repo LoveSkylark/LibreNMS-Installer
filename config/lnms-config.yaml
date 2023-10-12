@@ -49,6 +49,7 @@ smokeping:
 
 oxidized:
   enable: true
+  image: "oxidized/oxidized:0.29.1-12-gdab52d0"
   host:
     FQDN: "ox.test.local"
   credentials:
