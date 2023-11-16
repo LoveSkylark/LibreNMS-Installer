@@ -81,8 +81,4 @@ echo "################## Installation Complete ##################"
 echo ""
 echo "LibreNMS cluster is installed and configured successfully."
 echo ""
-echo "Run 'nms start' to start the LibreNMS cluster"
-
-
-
-cd 
+echo "Open a new Terminal and run 'nms start' to start the LibreNMS cluster"
