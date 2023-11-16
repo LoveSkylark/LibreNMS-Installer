@@ -1,0 +1,27 @@
+Usefull short cuts:
+
+nms start = install LibreNMS
+nms stop = uninstall LibreNMS
+nms edit = change LibreNMS configuration
+
+nms status = check LibreNMS status and start k9s
+nms cert = add TLS certificate
+nms help = libreNMS cli commands
+
+lnms = libreNMS cli commands inside container
+
+k=kubectl
+kl = list resources in current namespace
+kall = list resources in all namespaces
+kn <namespace> = switch to another namespace
+knd = switch back to default namespace
+kbash <pod_name> = start shell in a pod
+
+h=helm
+hl = list helm releases in current namespace
+hall = list helm releases in all namespaces
+hin = install helm chart
+hup = upgrade existing helm release
+hun = uninstall helm release
+
+k9s = manage the kube cluster
