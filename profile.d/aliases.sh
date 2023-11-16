@@ -162,10 +162,10 @@ nms() {
          "cert")
 
             echo "Inserting TLS secret manually..."
-
+            echo " "
             if [ -z "$2" ] || [ -z "$3" ]; then
                 echo "Cert and key files required: "
-                echo "nms cert /path/to/cert.pem /path/to/cert.key"  
+                echo "    nms cert /path/to/cert.pem /path/to/cert.key"  
                 return 1  
             fi
 

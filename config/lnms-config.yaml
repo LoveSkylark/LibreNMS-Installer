@@ -10,20 +10,26 @@ global:
 Company:
    name: "TEST CO"
 
+ingress:
+  # You need to install a cert if your turn on HTTPS:
+  # nms cert <certificate-file> <key-file>
+  https: false
+
 storage:
   path: "/data/"
 
 application:
   host:
     FQDN: "nms.test.local"
+    # volumSize can not be edited after inital install.
     volumeSize: "20Gi"
   SNMPcommunity: 
     - "community-string-1"
     - "community-string-2"
   dispatcher:
-    # 1 replica per 100 devices
     replicas: "1"
 
+# DB info not be changed after inital install.
 mariadb:
   credentials:
     rootPassword: "fooRootPassword"
@@ -31,7 +37,7 @@ mariadb:
     password: "bar"
 
 msmtpd:
-  enable: true
+  enable: false
   host:
     name: "msmtpd"
     FQDN: "smtp.gmail.com"
@@ -53,33 +59,36 @@ oxidized:
   host:
     FQDN: "ox.test.local"
   credentials:
+    # token needs to be generated inside LibreNMS run "nms edit" 
+    # to update this infromation after server is runnin.
     token: "API-token-generated-inside-LIBRE"
     
-  # Device can be grouped by as string in device NOTE or DESCRIPTION
-  group:
+    group:
     core:
       user: "deviceuser"
       password: "devicepassword"
+
+    # Add the string value under NOTE or DESCRIPTION to use alterntive suthentication
     one:
       user: ""
       password: ""
-      string: "/^ox-group-1/"
+      string: "/^auth-group-1/"
     two:
       user: ""
       password: ""
-      string: "/^ox-group-2/"
+      string: "/^auth-group-2/"
     three:
       user: ""
       password: ""
-      string: "/^ox-group-3/"
+      string: "/^auth-group-3/"
     four:
       user: ""
       password: ""
-      string: "/^ox-group-4/"
+      string: "/^auth-group-4/"
     five:
       user: ""
       password: ""
-      string: "/^ox-group-5/"
+      string: "/^auth-group-5/"
 
 xmatters:
   enable: false
