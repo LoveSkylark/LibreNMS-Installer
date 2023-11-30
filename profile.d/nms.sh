@@ -112,7 +112,7 @@ nms() {
         "help")
 
             echo "Displaying help..."
-            cat "$LNMS_DIR/installer/doc/nmsinfo.txt" || return 1  
+            cat "$LNMS_DIR/vault/LibreNMS-Installer/doc/nmsinfo.txt" || return 1  
             ;;
 
         *)
