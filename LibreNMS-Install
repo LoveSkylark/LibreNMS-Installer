@@ -65,7 +65,7 @@ if [ ! -f "$LNMS_DIR/lnms-config.yaml" ]; then
     sudo cp "$LNMS_DIR/vault/LibreNMS-Installer/config/lnms-config.yaml" "$LNMS_DIR/lnms-config.yaml"
 fi
 if [ ! -f "$LNMS_DIR/librenms/application/weathermap/templates" ]; then
-    sudo cp -r "$LNMS_DIR/vault/LibreNMS-Weathermap-template/*" "$LNMS_DIR/librenms/application/weathermap/"
+    sudo cp -r $LNMS_DIR/vault/LibreNMS-Weathermap-template/* $LNMS_DIR/librenms/application/weathermap/
 fi
 
 echo ""
@@ -74,7 +74,7 @@ echo "################## Adding aliases for KUBE & HELM ##################"
 echo ""
 echo "This step sets up convenient aliases for managing Kubernetes and Helm."
 echo ""
-sudo cp -r "$LNMS_DIR/vault/LibreNMS-Installer/profile.d/*" "/etc/profile.d/"
+sudo cp -r $LNMS_DIR/vault/LibreNMS-Installer/profile.d/* /etc/profile.d/
 source /etc/profile
 echo ""
 
