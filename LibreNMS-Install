@@ -53,18 +53,28 @@ echo ""
 echo "This step fetches the LibreNMS Helm chart from the repository."
 echo ""
 sudo mkdir -p "$LNMS_DIR/chart"
-sudo git clone https://github.com/LoveSkylark/LibreNMS-Helm.git "$LNMS_DIR/chart/LibreNMS-Helm"
-sudo git clone https://github.com/LoveSkylark/LibreNMS-Installer.git "$LNMS_DIR/installer"
+sudo git clone https://github.com/LoveSkylark/LibreNMS-Helm.git "$LNMS_DIR/vault/LibreNMS-Helm"
+sudo git clone https://github.com/LoveSkylark/LibreNMS-Installer.git "$LNMS_DIR/vault/LibreNMS-Installer"
+sudo git clone https://github.com/LoveSkylark/LibreNMS-Weathermap-template.git "$LNMS_DIR/vault/LibreNMS-Weathermap-template"
+
+echo "################## Fetching Config ##################"
+echo ""
+echo "  "
+echo ""
 if [ ! -f "$LNMS_DIR/lnms-config.yaml" ]; then
-    sudo cp "$LNMS_DIR/installer/config/lnms-config.yaml" "$LNMS_DIR/lnms-config.yaml"
+    sudo cp "$LNMS_DIR/vault/LibreNMS-Installer/config/lnms-config.yaml" "$LNMS_DIR/lnms-config.yaml"
 fi
+if [ ! -f "$LNMS_DIR/librenms/application/weathermap/templates" ]; then
+    sudo cp "$LNMS_DIR/vault/LibreNMS-Weathermap-template/" "$LNMS_DIR/librenms/application/weathermap/"
+fi
+
 echo ""
 
 echo "################## Adding aliases for KUBE & HELM ##################"
 echo ""
 echo "This step sets up convenient aliases for managing Kubernetes and Helm."
 echo ""
-sudo cp $LNMS_DIR/installer/profile.d/aliases.sh /etc/profile.d/aliases.sh
+sudo cp $LNMS_DIR/vault/LibreNMS-Installer/profile.d/ /etc/profile.d/
 source /etc/profile
 echo ""
 
@@ -73,7 +83,7 @@ echo "################## Setting up SNMP for LibreNMS ##################"
 echo ""
 echo "This step configures SNMP for LibreNMS monitoring."
 echo ""
-sudo cp $LNMS_DIR/installer/snmpd.conf.d/snmp.conf /etc/snmp/snmpd.conf.d/snmp.conf
+sudo cp $LNMS_DIR/vault/LibreNMS-Installer/snmpd.conf.d/snmp.conf /etc/snmp/snmpd.conf.d/snmp.conf
 sudo systemctl restart snmpd
 echo ""
 

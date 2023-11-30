@@ -1,73 +1,6 @@
-
 #!/bin/bash
 
-# Kubectl commands
-
-alias k="kubectl"
-
-kn() {
-    if [ "$1" != "" ]; then
-            kubectl config set-context --current --namespace=$1
-    else
-            echo -e "Error, please provide a valid Namespace"
-    fi
-}
-
-knd() {
-    kubectl config set-context --current --namespace=default
-}
-
-ku() {
-    kubectl config unset current-context
-}
-
-kall() {
-    kubectl get all --all-namespaces
-}
-
-kbash() {
-    if [ "$1" != "" ]; then
-            kubectl exec --stdin --tty $1 -- /bin/bash
-    else
-            echo -e "Error, please provide a pod name"
-    fi
-}
-
-# Helm commands
-alias h="helm"
-alias hl="helm list"
-alias hall="helm list --all-namespaces"
-
-hin() {
-    if [ "$2" = "" ]; then
-            echo -e "Error, please provide a release name, chart and value file"
-    elif [ "$3" = "" ]; then
-            helm install $1 $2 
-    else 
-            helm install $1 $2 -f $3 
-    fi
-}
-
-hup()  {
-    if [ "$2" = "" ]; then
-            echo -e "Error, please provide a release name, chart and value file"
-    elif [ "$3" = "" ]; then
-            helm upgrade $1 $2 
-    else 
-            helm upgrade $1 $2 -f $3 
-    fi
-}
-
-hun() {
-    if [ "$1" != "" ]; then
-            helm uninstall $1
-    else
-            echo -e "Error, please provide a release name"
-    fi
-}
-
-# LibreNMS commands
-
+# extending lnms into pod
 alias lnms="kubectl exec --namespace=librenms --stdin --tty lnms-dispatcher-0 -- /usr/bin/lnms"
 
 nms() {
@@ -140,6 +73,10 @@ nms() {
             else
                 echo "Error: LibreNMS pod not found."
             fi
+            ;;
+
+
+        "monitor")
 
             echo "Starting k9s dashboard..."
             k9s
@@ -159,7 +96,7 @@ nms() {
             fi
             ;;
 
-         "cert")
+        "cert")
 
             echo "Inserting TLS secret manually..."
             echo " "
@@ -169,7 +106,7 @@ nms() {
                 return 1  
             fi
 
-            kubectl create secret tls https --cert="$2" --key="$3"
+            kubectl apply --force -f <(kubectl create secret tls https --cert="$2" --key="$3" -o yaml)
             ;;
 
         "help")
@@ -180,7 +117,7 @@ nms() {
 
         *)
 
-            echo "Usage: $0 {start|stop|edit|update|status|update|map|help}"
+            echo "Usage: $0 {start|stop|edit|update|status|monitor|map|help}"
             return 1
             ;;
     esac
