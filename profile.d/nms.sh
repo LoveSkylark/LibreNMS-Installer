@@ -106,7 +106,7 @@ nms() {
                 return 1  
             fi
 
-            kubectl apply --force -f <(kubectl create secret tls https --cert="$2" --key="$3" --namespace librenms -o yaml)
+            kubectl apply --force -f <(kubectl create secret tls https-cert --cert="$2" --key="$3" --namespace librenms -o yaml)
             ;;
 
         "help")
@@ -117,7 +117,7 @@ nms() {
 
         *)
 
-            echo "Usage: $0 {start|stop|edit|update|status|monitor|map|help}"
+            echo "Usage: $0 {start|stop|edit|update|status|monitor|cert|map|help}"
             return 1
             ;;
     esac
