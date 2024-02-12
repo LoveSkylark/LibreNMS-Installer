@@ -6,9 +6,8 @@
 
 global:
   TZ: "Atlantic/Reykjavik"
-
-Company:
-   name: "TEST CO"
+  company:
+    name: "TEST CO"
 
 ingress:
   # You need to install a cert if your turn on HTTPS:
