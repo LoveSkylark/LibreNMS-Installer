@@ -107,6 +107,7 @@ nms() {
             fi
 
             kubectl apply --force -f <(kubectl create secret tls https-cert --cert="$2" --key="$3" --namespace librenms -o yaml)
+            echo "kubectl create secret tls https-cert --cert=$2 --key=$3 --namespace librenms -o yaml"
             ;;
 
         "help")

@@ -83,6 +83,8 @@ echo "################## Setting up SNMP for LibreNMS ##################"
 echo ""
 echo "This step configures SNMP for LibreNMS monitoring."
 echo ""
+curl -o /usr/bin/distro https://raw.githubusercontent.com/librenms/librenms-agent/master/snmp/distro
+chmod +x /usr/bin/distro
 sudo cp $LNMS_DIR/vault/LibreNMS-Installer/snmpd.conf.d/snmp.conf /etc/snmp/snmpd.conf.d/snmp.conf
 sudo systemctl restart snmpd
 sudo systemctl enable snmpd
