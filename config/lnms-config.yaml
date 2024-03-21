@@ -63,7 +63,7 @@ oxidized:
     token: "API-token-generated-inside-LIBRE"
     
     group:
-    core:
+  core:
       user: "deviceuser"
       password: "devicepassword"
 
