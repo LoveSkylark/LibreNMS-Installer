@@ -62,32 +62,30 @@ oxidized:
     # to update this infromation after server is runnin.
     token: "API-token-generated-inside-LIBRE"
     
-    group:
-  core:
-      user: "deviceuser"
+  group:
+    core:
+      user: "deviceadmin"
       password: "devicepassword"
-
-    # Add the string value under NOTE or DESCRIPTION to use alterntive suthentication
-    one:
+    G1:
       user: ""
       password: ""
-      string: "/^auth-group-1/"
-    two:
+      string: "/^ox-group-1/"
+    G2:
       user: ""
       password: ""
-      string: "/^auth-group-2/"
-    three:
+      string: "/^ox-group-2/"
+    G3:
+      password: ""
+      pass: ""
+      string: "/^ox-group-3/"
+    G4:
+      password: ""
+      pass: ""
+      string: "/^ox-group-4/"
+    G5:
       user: ""
       password: ""
-      string: "/^auth-group-3/"
-    four:
-      user: ""
-      password: ""
-      string: "/^auth-group-4/"
-    five:
-      user: ""
-      password: ""
-      string: "/^auth-group-5/"
+      string: "/^ox-group-5/"
 
 xmatters:
   enable: false
