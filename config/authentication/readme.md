@@ -1,7 +1,7 @@
-# PHP config files may be copied int the /application/config to adjust the setup.
-# 
-# Most configuration should be done in the WEBgui or by using "lmns config:set". 
-# But if you whant to lock in a configuration so no one can change it, 
-# then create a .php file and copy it into the /application/config directory.
-# 
-# This mostly good for external authentication
+# PHP config files may be copied into /application/config to adjust the setup.
+#
+# Most configuration should be done in the web UI or by using "lnms config:set".
+# If you want to lock a setting so it cannot be changed through the UI,
+# create a .php file and copy it into /application/config.
+#
+# This is mostly useful for external authentication.

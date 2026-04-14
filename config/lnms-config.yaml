@@ -7,7 +7,7 @@
 global:
   TZ: "Atlantic/Reykjavik"
   company:
-    name: "TEST CO"
+    name: "Example Company"
 
 ingress:
   # You need to install a cert if your turn on HTTPS:
@@ -19,8 +19,8 @@ storage:
 
 application:
   host:
-    FQDN: "nms.test.local"
-    # volumSize can not be edited after inital install.
+    FQDN: "nms.example.local"
+    # volumeSize cannot be changed after initial install.
     volumeSize: "20Gi"
   SNMPcommunity: 
     - "community-string-1"
@@ -28,12 +28,12 @@ application:
   dispatcher:
     replicas: "1"
 
-# DB info not be changed after inital install.
+# DB info should not be changed after initial install.
 mariadb:
   credentials:
-    rootPassword: "fooRootPassword"
-    user: "foo"
-    password: "bar"
+    rootPassword: "change-me-root-password"
+    user: "librenms"
+    password: "change-me-db-password"
 
 msmtpd:
   enable: false
@@ -41,11 +41,11 @@ msmtpd:
     name: "msmtpd"
     FQDN: "smtp.gmail.com"
     port: "587"
-  from: "foo@gmail.com"
+  from: "noreply@example.com"
   credentials:
     email:
-      user: "foo"
-      password: "bar"   
+      user: "smtp-user"
+      password: "change-me-smtp-password"
 
 smokeping:
   enable: false
@@ -58,14 +58,14 @@ oxidized:
   host:
     FQDN: "ox.test.local"
   credentials:
-    # token needs to be generated inside LibreNMS run "nms edit" 
-    # to update this infromation after server is runnin.
+    # token needs to be generated inside LibreNMS. Run "nms edit"
+    # to update this information after server is running.
     token: "API-token-generated-inside-LIBRE"
     
   group:
     core:
-      user: "deviceadmin"
-      password: "devicepassword"
+      user: "oxidized-user"
+      password: "change-me-oxidized-password"
     G1:
       user: ""
       password: ""
@@ -75,12 +75,12 @@ oxidized:
       password: ""
       string: "/^ox-group-2/"
     G3:
+      user: ""
       password: ""
-      pass: ""
       string: "/^ox-group-3/"
     G4:
+      user: ""
       password: ""
-      pass: ""
       string: "/^ox-group-4/"
     G5:
       user: ""

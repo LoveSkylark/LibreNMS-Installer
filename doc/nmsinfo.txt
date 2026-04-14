@@ -1,14 +1,26 @@
-Usefull short cuts:
+Useful shortcuts:
 
 nms start = install LibreNMS
 nms stop = uninstall LibreNMS
 nms edit = change LibreNMS configuration
+nms preflight = run dependency and cluster checks before install/upgrade
 
-nms status = check LibreNMS status and start k9s
+nms status = check LibreNMS pod status
+nms monitor = start k9s
 nms cert = add TLS certificate
-nms help = libreNMS cli commands
+nms map = generate weather map
+nms help = show this help text
 
-lnms = libreNMS cli commands inside container
+Options for start/edit:
+--non-interactive (-n) = skip opening vim editor
+--no-auto-add-host = skip adding local host via SNMP after install
+
+Environment overrides:
+NMS_NO_EDITOR=1 = default non-interactive mode
+NMS_AUTO_ADD_HOST=0 = disable auto host add by default
+NMS_HOST_IP=<ip> = force host IP used for auto add
+
+lnms = run LibreNMS CLI inside the dispatcher pod
 
 k=kubectl
 kl = list resources in current namespace
@@ -24,4 +36,4 @@ hin = install helm chart
 hup = upgrade existing helm release
 hun = uninstall helm release
 
-k9s = manage the kube cluster
+k9s = manage the k3s cluster

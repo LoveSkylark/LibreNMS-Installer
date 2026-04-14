@@ -1,27 +1,69 @@
+# LibreNMS Installer
 
+This repository bootstraps a single-node LibreNMS deployment on K3s, installs helper tooling, and provides shell shortcuts for day-to-day management.
 
-1. It begins by updating the Linux system and installing essential tools such as curl, git, and vim.
+## What gets installed
 
-2. Next, it downloads and installs K3s, a lightweight Kubernetes distribution, by executing the installation script obtained from the URL specified by the `K3S_INSTALL_SCRIPT` variable.
+- K3s
+- Helm
+- K9s
+- SNMP tooling (`snmp`, `snmpd`)
+- Profile helpers under `/etc/profile.d/`
 
-3. It then downloads and installs K9s, a terminal-based Kubernetes dashboard, by executing the installation script obtained from the URL specified by the `K9S_INSTALL_SCRIPT` variable. The script also moves the K9s binary to the `BIN_DIR` directory.
+## Quick start
 
-4. The script proceeds to download and install Helm, the Kubernetes package manager, by executing the installation script obtained from the Helm GitHub repository.
+1. Run the installer as a user with sudo access:
 
-5. It fetches the LibreNMS Helm chart and installer repositories from the GitHub repository specified by the URLs `https://github.com/LoveSkylark/LibreNMS-Helm.git` and `https://github.com/LoveSkylark/LibreNMS-Installer.git`, respectively. The repositories are cloned into the `LNMS_DIR/chart/LibreNMS-Helm` and `LNMS_DIR/installer` directories, respectively.
+```bash
+chmod +x ./LibreNMS-Install
+./LibreNMS-Install
+```
 
-6. It copies the `lnms-config.yaml` file from the installer directory to the `LNMS_DIR` directory if it doesn't already exist.
+2. Open a new shell session (or source `/etc/profile.d/*.sh`).
+3. Start LibreNMS:
 
-7. The script sets up aliases for managing Kubernetes and Helm by copying the necessary files from the installer's `profile.d` directory to `/etc/profile.d/`.
+```bash
+nms start
+```
 
-8. It configures SNMP for LibreNMS monitoring by copying the SNMP configuration file from the installer's `snmpd.conf.d` directory to `/etc/snmp/snmpd.conf.d` and restarting the SNMP daemon.
+4. Verify pod status:
 
-9. The script prompts the user to configure the LibreNMS cluster by editing the `lnms-config.yaml` file using the Vim editor.
+```bash
+nms status
+```
 
-10. The installation of the LibreNMS cluster is initiated by calling the `LibreClusterInstall` function, which uses Helm to install the LibreNMS Helm chart with the specified configuration file.
+## Important paths
 
-11. It adds the host IP address to SNMP monitoring by calling the `LibreSNMPadd` function, which retrieves the host IP address and uses the `lnms device:add` command to add it to SNMP monitoring.
+- Main data directory: `${LNMS_DIR:-/data}`
+- Runtime values file: `${LNMS_DIR:-/data}/lnms-config.yaml`
+- Chart clone path: `${LNMS_DIR:-/data}/vault/LibreNMS-Helm`
 
-12. Finally, the script displays a completion message and provides instructions for managing the Kubernetes cluster, accessing the LibreNMS web interface, using the K9s dashboard, editing the LibreNMS cluster configuration, and adding additional devices to LibreNMS.
+## Common commands
 
-Please note that the script assumes certain directory paths (`BIN_DIR`, `LNMS_DIR`) and URLs (`K3S_INSTALL_SCRIPT`, `K9S_INSTALL_SCRIPT`). Make sure to modify them according to your environment before running the script.
+- `nms start` Install LibreNMS release
+- `nms stop` Uninstall LibreNMS release
+- `nms edit` Edit values file and apply upgrade
+- `nms update` Apply Helm upgrade from current values
+- `nms preflight` Validate dependencies, chart path, values file, and cluster reachability
+- `nms status` Describe LibreNMS app pod
+- `nms monitor` Open K9s
+- `nms map` Run Weathermap poller inside app pod
+- `nms cert <cert> <key>` Create/update TLS secret `https-cert` in namespace `librenms`
+- `nms help` Print local command help
+
+Automation options for `start` and `edit`:
+
+- `--non-interactive` or `-n` Skip opening `vim`
+- `--no-auto-add-host` Skip automatic `lnms device:add` for the local host
+
+Environment variable overrides:
+
+- `NMS_NO_EDITOR=1`
+- `NMS_AUTO_ADD_HOST=0`
+- `NMS_HOST_IP=<ip>` force the IP used for auto host add
+
+## Notes
+
+- The installer is designed to be idempotent for clone/copy steps.
+- Helm operations use namespace `librenms`.
+- Update placeholders in `config/lnms-config.yaml` before production use.
