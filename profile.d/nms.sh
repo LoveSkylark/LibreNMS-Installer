@@ -2,19 +2,34 @@
 
 lnms() {
     local namespace="librenms"
-    local dispatcher_pod
+    local target_pod
+    local target_container
+    local containers
 
-    dispatcher_pod=$(kubectl get pod -n "$namespace" -l app.kubernetes.io/component=dispatcher -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
-    if [ -z "$dispatcher_pod" ]; then
-        dispatcher_pod=$(kubectl get pods -n "$namespace" --no-headers 2>/dev/null | awk '/lnms-dispatcher/ {print $1; exit}')
+    # Try common labels first, then fall back to a running pod name match.
+    target_pod=$(kubectl get pod -n "$namespace" -l app.kubernetes.io/component=dispatcher -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+    if [ -z "$target_pod" ]; then
+        target_pod=$(kubectl get pod -n "$namespace" -l app.kubernetes.io/name=librenms,app.kubernetes.io/component=app -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+    fi
+    if [ -z "$target_pod" ]; then
+        target_pod=$(kubectl get pods -n "$namespace" --field-selector=status.phase=Running --no-headers 2>/dev/null | awk '/(dispatcher|lnms-app|librenms)/ {print $1; exit}')
     fi
 
-    if [ -z "$dispatcher_pod" ]; then
-        echo "Error: dispatcher pod not found in namespace $namespace."
+    if [ -z "$target_pod" ]; then
+        echo "Error: LibreNMS pod not found in namespace $namespace."
         return 1
     fi
 
-    kubectl exec --namespace="$namespace" --stdin --tty "$dispatcher_pod" -- /usr/bin/lnms "$@"
+    containers=$(kubectl get pod -n "$namespace" "$target_pod" -o jsonpath='{.spec.containers[*].name}' 2>/dev/null || true)
+    for target_container in $containers; do
+        if kubectl exec -n "$namespace" "$target_pod" -c "$target_container" -- sh -c 'command -v lnms >/dev/null 2>&1 || [ -x /usr/bin/lnms ]' >/dev/null 2>&1; then
+            kubectl exec --namespace="$namespace" --stdin --tty "$target_pod" -c "$target_container" -- lnms "$@"
+            return $?
+        fi
+    done
+
+    echo "Error: found pod '$target_pod' but no container with lnms command."
+    return 1
 }
 
 nms() {
