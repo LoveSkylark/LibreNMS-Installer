@@ -7,6 +7,7 @@ K9S_INSTALL_SCRIPT="https://webi.sh/k9s"
 BIN_DIR="${BIN_DIR:-/usr/local/bin}"
 LNMS_DIR="${LNMS_DIR:-/data}"
 LNMS_HELM_BRANCH="${LNMS_HELM_BRANCH:-main}"
+ENABLE_WEATHERMAP="${ENABLE_WEATHERMAP:-false}"
 
 # Start of the script
 echo "################## Updating Linux ##################"
@@ -57,7 +58,7 @@ echo "################## Fetching LibreNMS Helm Repo ##################"
 echo ""
 echo "This step fetches the LibreNMS Helm chart from the repository."
 echo ""
-sudo mkdir -p "$LNMS_DIR/chart" "$LNMS_DIR/vault" "$LNMS_DIR/librenms/application/weathermap/templates"
+sudo mkdir -p "$LNMS_DIR/chart" "$LNMS_DIR/vault"
 
 if [ ! -d "$LNMS_DIR/vault/LibreNMS-Helm/.git" ]; then
     sudo git clone --branch "$LNMS_HELM_BRANCH" https://github.com/LoveSkylark/LibreNMS-Helm.git "$LNMS_DIR/vault/LibreNMS-Helm"
@@ -73,10 +74,14 @@ else
     sudo git -C "$LNMS_DIR/vault/LibreNMS-Installer" pull --ff-only
 fi
 
-if [ ! -d "$LNMS_DIR/vault/LibreNMS-Weathermap-template/.git" ]; then
-    sudo git clone https://github.com/LoveSkylark/LibreNMS-Weathermap-template.git "$LNMS_DIR/vault/LibreNMS-Weathermap-template"
+if [ "$ENABLE_WEATHERMAP" = "true" ]; then
+    if [ ! -d "$LNMS_DIR/vault/LibreNMS-Weathermap-template/.git" ]; then
+        sudo git clone https://github.com/LoveSkylark/LibreNMS-Weathermap-template.git "$LNMS_DIR/vault/LibreNMS-Weathermap-template"
+    else
+        sudo git -C "$LNMS_DIR/vault/LibreNMS-Weathermap-template" pull --ff-only
+    fi
 else
-    sudo git -C "$LNMS_DIR/vault/LibreNMS-Weathermap-template" pull --ff-only
+    echo "Skipping Weathermap template repository sync (ENABLE_WEATHERMAP=$ENABLE_WEATHERMAP)."
 fi
 
 echo "################## Fetching Config ##################"
@@ -86,11 +91,15 @@ echo ""
 if [ ! -f "$LNMS_DIR/lnms-config.yaml" ]; then
     sudo cp "$LNMS_DIR/vault/LibreNMS-Installer/config/lnms-config.yaml" "$LNMS_DIR/lnms-config.yaml"
 fi
-if [ ! -d "$LNMS_DIR/librenms/application/weathermap/templates" ]; then
-    sudo mkdir -p "$LNMS_DIR/librenms/application/weathermap/templates"
-fi
-if [ -z "$(ls -A "$LNMS_DIR/librenms/application/weathermap/templates" 2>/dev/null)" ]; then
-    sudo cp -r "$LNMS_DIR/vault/LibreNMS-Weathermap-template"/* "$LNMS_DIR/librenms/application/weathermap/"
+if [ "$ENABLE_WEATHERMAP" = "true" ]; then
+    if [ ! -d "$LNMS_DIR/librenms/application/weathermap/templates" ]; then
+        sudo mkdir -p "$LNMS_DIR/librenms/application/weathermap/templates"
+    fi
+    if [ -z "$(ls -A "$LNMS_DIR/librenms/application/weathermap/templates" 2>/dev/null)" ]; then
+        sudo cp -r "$LNMS_DIR/vault/LibreNMS-Weathermap-template"/* "$LNMS_DIR/librenms/application/weathermap/"
+    fi
+else
+    echo "Skipping Weathermap config population (ENABLE_WEATHERMAP=$ENABLE_WEATHERMAP)."
 fi
 
 echo ""
