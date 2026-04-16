@@ -115,8 +115,21 @@ sudo systemctl restart snmpd
 sudo systemctl enable snmpd
 echo ""
 
+
+if [ -f "/etc/profile.d/nms.sh" ]; then
+    # Prefer the installed profile script path.
+    # shellcheck disable=SC1091
+    source "/etc/profile.d/nms.sh"
+elif [ -f "$LNMS_DIR/vault/LibreNMS-Installer/profile.d/nms.sh" ]; then
+    # Load nms() in this shell so no new terminal is required.
+    # shellcheck disable=SC1090
+    source "$LNMS_DIR/vault/LibreNMS-Installer/profile.d/nms.sh"
+else
+    echo "Warning: nms profile script not found in /etc/profile.d"
+fi
+
 echo "################## Installation Complete ##################"
 echo ""
 echo "LibreNMS cluster is installed and configured successfully."
 echo ""
-echo "Open a new Terminal and run 'nms start' to start the LibreNMS cluster"
+echo "Starting LibreNMS cluster..."
