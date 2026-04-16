@@ -1,7 +1,7 @@
 #!/bin/bash
 
-lnms() {
-    local namespace="librenms"
+resolve_lnms_exec_target() {
+    local namespace="${1:-librenms}"
     local target_pod
     local target_container
     local containers
@@ -16,30 +16,46 @@ lnms() {
     fi
 
     if [ -z "$target_pod" ]; then
-        echo "Error: LibreNMS pod not found in namespace $namespace."
         return 1
     fi
 
     containers=$(kubectl get pod -n "$namespace" "$target_pod" -o jsonpath='{.spec.containers[*].name}' 2>/dev/null || true)
     for target_container in $containers; do
         if kubectl exec -n "$namespace" "$target_pod" -c "$target_container" -- sh -c 'command -v lnms >/dev/null 2>&1 || [ -x /usr/bin/lnms ]' >/dev/null 2>&1; then
-            kubectl exec --namespace="$namespace" --stdin --tty "$target_pod" -c "$target_container" -- lnms "$@"
-            return $?
+            echo "$target_pod $target_container"
+            return 0
         fi
     done
 
-    echo "Error: found pod '$target_pod' but no container with lnms command."
     return 1
+}
+
+lnms() {
+    local namespace="librenms"
+    local target_pod
+    local target_container
+
+    if ! read -r target_pod target_container < <(resolve_lnms_exec_target "$namespace"); then
+        echo "Error: LibreNMS pod not found in namespace $namespace."
+        return 1
+    fi
+
+    kubectl exec --namespace="$namespace" --stdin --tty "$target_pod" -c "$target_container" -- lnms "$@"
 }
 
 nms() {
     local action="$1"
     shift || true
     local LNMS_DIR="${LNMS_DIR:-/data}"
-    local KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+    local KUBECONFIG="${KUBECONFIG:-/etc/rancher/k3s/k3s.yaml}"
     local NAMESPACE="librenms"
     local NO_EDITOR="${NMS_NO_EDITOR:-0}"
     local AUTO_ADD_HOST="${NMS_AUTO_ADD_HOST:-1}"
+    local AUTO_ADD_HOST_READY=1
+    local SNMP_COMMUNITY="${NMS_SNMP_COMMUNITY:-locallibremon}"
+    local SNMP_PORT="${NMS_SNMP_PORT:-1161}"
+
+    export KUBECONFIG
 
     while [ "$#" -gt 0 ]; do
         case "$1" in
@@ -56,7 +72,9 @@ nms() {
                 AUTO_ADD_HOST=1
                 ;;
             *)
-                echo "Warning: unknown option '$1' ignored."
+                echo "Error: unknown option '$1'."
+                echo "Usage: nms {start|stop|edit|update|status|monitor|cert|map|preflight|help} [--non-interactive] [--no-auto-add-host]"
+                return 1
                 ;;
         esac
         shift
@@ -101,9 +119,80 @@ nms() {
         ' "$LNMS_DIR/lnms-config.yaml" 2>/dev/null
     }
 
+    check_snmp_ready() {
+        local host_ip="$1"
+        local listener_ok=0
+        local community_ok=0
+
+        if command -v ss >/dev/null 2>&1; then
+            if ss -lunH 2>/dev/null | awk '{print $5}' | grep -Eq "(^|[.:])$SNMP_PORT$"; then
+                listener_ok=1
+            fi
+        elif command -v netstat >/dev/null 2>&1; then
+            if netstat -lun 2>/dev/null | awk '{print $4}' | grep -Eq "(^|[.:])$SNMP_PORT$"; then
+                listener_ok=1
+            fi
+        fi
+
+        if grep -RhsE "^[[:space:]]*(rocommunity|rocommunity6)[[:space:]]+$SNMP_COMMUNITY([[:space:]]|$)" /etc/snmp/snmpd.conf /etc/snmp/snmpd.conf.d/*.conf 2>/dev/null | head -n 1 >/dev/null; then
+            community_ok=1
+        fi
+
+        if [ "$listener_ok" -eq 1 ]; then
+            echo "[OK] SNMP UDP port appears open: $SNMP_PORT"
+        else
+            echo "[WARN] SNMP UDP port not detected as listening: $SNMP_PORT"
+        fi
+
+        if [ "$community_ok" -eq 1 ]; then
+            echo "[OK] SNMP community found in config: $SNMP_COMMUNITY"
+        else
+            echo "[WARN] SNMP community not found in /etc/snmp/snmpd.conf*: $SNMP_COMMUNITY"
+        fi
+
+        if command -v snmpget >/dev/null 2>&1; then
+            if timeout 3 snmpget -v2c -c "$SNMP_COMMUNITY" -Onqv -r 0 -t 1 "$host_ip:$SNMP_PORT" 1.3.6.1.2.1.1.3.0 >/dev/null 2>&1; then
+                echo "[OK] SNMP probe succeeded against $host_ip:$SNMP_PORT"
+                return 0
+            fi
+            echo "[WARN] SNMP probe failed against $host_ip:$SNMP_PORT"
+            return 1
+        fi
+
+        [ "$listener_ok" -eq 1 ] && [ "$community_ok" -eq 1 ]
+    }
+
+    wait_for_librenms_ready() {
+        local timeout_sec="${1:-240}"
+        local pod_name
+        local start_ts
+        local now_ts
+
+        start_ts=$(date +%s)
+        while true; do
+            if read -r pod_name _ < <(resolve_lnms_exec_target "$NAMESPACE"); then
+                kubectl wait -n "$NAMESPACE" --for=condition=Ready "pod/$pod_name" --timeout="${timeout_sec}s" >/dev/null 2>&1
+                return $?
+            fi
+
+            now_ts=$(date +%s)
+            if [ $((now_ts - start_ts)) -ge "$timeout_sec" ]; then
+                return 1
+            fi
+            sleep 2
+        done
+    }
+
+    device_already_added() {
+        local host_ip="$1"
+
+        lnms device:list 2>/dev/null | awk -v target="$host_ip" '$0 ~ target {found=1} END {exit(found ? 0 : 1)}'
+    }
+
     run_preflight() {
         local ok=1
         local fqdn
+        local host_ip
 
         echo "Running preflight checks..."
 
@@ -153,6 +242,19 @@ nms() {
             echo "[WARN] Could not parse application.host.FQDN from values file."
         fi
 
+        if [ "$AUTO_ADD_HOST" -eq 1 ]; then
+            host_ip=$(get_host_ip)
+            if [ -z "$host_ip" ]; then
+                echo "[WARN] Could not determine host IP for SNMP auto-add."
+                AUTO_ADD_HOST_READY=0
+            elif check_snmp_ready "$host_ip"; then
+                echo "[OK] SNMP precheck passed for auto-add target: $host_ip:$SNMP_PORT"
+            else
+                echo "[WARN] SNMP precheck failed; install will continue but automatic host add will be skipped."
+                AUTO_ADD_HOST_READY=0
+            fi
+        fi
+
         if [ "$ok" -eq 1 ]; then
             echo "Preflight passed."
             return 0
@@ -164,6 +266,11 @@ nms() {
 
     get_librenms_pod() {
         local pod_name
+        if read -r pod_name _ < <(resolve_lnms_exec_target "$NAMESPACE"); then
+            echo "$pod_name"
+            return 0
+        fi
+
         pod_name=$(kubectl get pod -n "$NAMESPACE" -l app.kubernetes.io/name=librenms,app.kubernetes.io/component=app -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
         if [ -n "$pod_name" ]; then
             echo "$pod_name"
@@ -192,19 +299,25 @@ nms() {
             echo "Installing LibreNMS in namespace [$NAMESPACE] using chart:[$LNMS_DIR/vault/LibreNMS-Helm/] and config:[$LNMS_DIR/lnms-config.yaml]"
             helm install librenms "$LNMS_DIR/vault/LibreNMS-Helm/" -n "$NAMESPACE" --create-namespace -f "$LNMS_DIR/lnms-config.yaml" || return 1
 
-            if [ "$AUTO_ADD_HOST" -eq 1 ]; then
-                kubectl wait -n "$NAMESPACE" --for=condition=Ready pod -l app.kubernetes.io/component=dispatcher --timeout=240s >/dev/null 2>&1 || true
+            if [ "$AUTO_ADD_HOST" -eq 1 ] && [ "$AUTO_ADD_HOST_READY" -eq 1 ]; then
+                wait_for_librenms_ready 240 || true
 
                 local host_ip
                 host_ip=$(get_host_ip)
 
                 echo "Adding LibreNMS host to monitoring..."
                 if [ -n "$host_ip" ]; then
-                    echo "   Adding $host_ip to SNMP..."
-                    lnms device:add -2 -c locallibremon -r 1161 -d LibreNMS "$host_ip" || return 1
+                    if device_already_added "$host_ip"; then
+                        echo "   Host $host_ip already exists in LibreNMS, skipping add."
+                    else
+                        echo "   Adding $host_ip to SNMP..."
+                        lnms device:add -2 -c "$SNMP_COMMUNITY" -r "$SNMP_PORT" -d LibreNMS "$host_ip" || return 1
+                    fi
                 else
                     echo "No suitable host IPv4 address could be found for SNMP monitoring."
                 fi
+            elif [ "$AUTO_ADD_HOST" -eq 1 ]; then
+                echo "Skipping automatic host add because SNMP precheck failed."
             else
                 echo "Skipping automatic host add (--no-auto-add-host)."
             fi
@@ -259,10 +372,16 @@ nms() {
 
             echo "Generating weather map..."
             local pod_name
+            local pod_container
             pod_name=$(get_librenms_pod)
             
             if [ -n "$pod_name" ]; then
-                kubectl exec -it "$pod_name" --namespace="$NAMESPACE" -- php /opt/librenms/html/plugins/Weathermap/map-poller.php
+                if read -r pod_name pod_container < <(resolve_lnms_exec_target "$NAMESPACE"); then
+                    kubectl exec -it "$pod_name" -c "$pod_container" --namespace="$NAMESPACE" -- php /opt/librenms/html/plugins/Weathermap/map-poller.php
+                else
+                    echo "Error: LibreNMS executable container not found."
+                    return 1
+                fi
             else
                 echo "Error: LibreNMS pod not found."
             fi
@@ -272,13 +391,20 @@ nms() {
 
             echo "Inserting TLS secret manually..."
             echo " "
-            if [ -z "$2" ] || [ -z "$3" ]; then
+            if [ -z "$1" ] || [ -z "$2" ]; then
                 echo "Cert and key files required: "
                 echo "    nms cert /path/to/cert.pem /path/to/cert.key"  
                 return 1  
             fi
 
-            kubectl -n "$NAMESPACE" create secret tls https-cert --cert="$2" --key="$3" --dry-run=client -o yaml | kubectl apply -n "$NAMESPACE" -f -
+            if kubectl -n "$NAMESPACE" create secret tls https-cert --cert="$1" --key="$2" --dry-run=client -o yaml | kubectl apply -n "$NAMESPACE" -f -; then
+                echo "TLS secret https-cert created/updated in namespace $NAMESPACE"
+                return 0
+            fi
+
+            echo "Warning: apply failed, attempting replace by delete/recreate (useful for immutable secrets)."
+            kubectl -n "$NAMESPACE" delete secret https-cert >/dev/null 2>&1 || true
+            kubectl -n "$NAMESPACE" create secret tls https-cert --cert="$1" --key="$2" || return 1
             echo "TLS secret https-cert created/updated in namespace $NAMESPACE"
             ;;
 
