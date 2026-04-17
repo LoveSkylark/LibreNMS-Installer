@@ -48,7 +48,7 @@ nms() {
     shift || true
     local LNMS_DIR="${LNMS_DIR:-/data}"
     local KUBECONFIG="${KUBECONFIG:-/etc/rancher/k3s/k3s.yaml}"
-    local NAMESPACE="librenms"
+    local NAMESPACE="${NMS_NAMESPACE:-librenms}"
     local NO_EDITOR="${NMS_NO_EDITOR:-0}"
     local AUTO_ADD_HOST="${NMS_AUTO_ADD_HOST:-1}"
     local AUTO_ADD_HOST_READY=1
@@ -280,10 +280,31 @@ nms() {
         kubectl get pods -n "$NAMESPACE" --no-headers 2>/dev/null | awk '/lnms-app/ {print $1; exit}'
     }
 
+    ensure_namespace_exists() {
+        if ! kubectl get namespace "$NAMESPACE" >/dev/null 2>&1; then
+            echo "Creating namespace: $NAMESPACE"
+            kubectl create namespace "$NAMESPACE" >/dev/null || return 1
+        fi
+    }
+
+    existing_release_namespace() {
+        helm list --all-namespaces --filter '^librenms$' -o json 2>/dev/null | awk -F '"' '/"namespace"/ {print $4; exit}'
+    }
+
     case "$action" in
         "start")
 
             run_preflight || return 1
+
+            local release_namespace
+            release_namespace=$(existing_release_namespace || true)
+            if [ -n "$release_namespace" ] && [ "$release_namespace" != "$NAMESPACE" ]; then
+                echo "Error: Helm release 'librenms' already exists in namespace '$release_namespace'."
+                echo "Use NMS_NAMESPACE=$release_namespace for this environment, or uninstall/migrate the existing release first."
+                return 1
+            fi
+
+            ensure_namespace_exists || return 1
 
             if kubectl get deployment librenms -n "$NAMESPACE" >/dev/null 2>&1; then
                 echo "LibreNMS already installed, skipping." 

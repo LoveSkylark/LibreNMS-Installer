@@ -4,22 +4,84 @@ set -euo pipefail
 # Define variables
 K3S_INSTALL_SCRIPT="https://get.k3s.io"
 K9S_INSTALL_SCRIPT="https://webi.sh/k9s"
+HELM_INSTALL_SCRIPT="https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3"
 BIN_DIR="${BIN_DIR:-/usr/local/bin}"
 LNMS_DIR="${LNMS_DIR:-/data}"
 LNMS_HELM_BRANCH="${LNMS_HELM_BRANCH:-main}"
 ENABLE_WEATHERMAP="${ENABLE_WEATHERMAP:-false}"
+K3S_CHANNEL="${K3S_CHANNEL:-stable}"
+K3S_VERSION="${K3S_VERSION:-}"
+K9S_VERSION="${K9S_VERSION:-}"
+HELM_VERSION="${HELM_VERSION:-}"
+DRY_RUN=0
+SKIP_UPGRADE=0
+
+usage() {
+    cat <<'EOF'
+Usage: ./LibreNMS-Install [options]
+
+Options:
+  --dry-run         Print actions without making changes
+  --skip-upgrade    Skip apt-get upgrade
+  --help            Show this help
+EOF
+}
+
+run_cmd() {
+    if [ "$DRY_RUN" -eq 1 ]; then
+        printf '[dry-run]'
+        printf ' %q' "$@"
+        printf '\n'
+        return 0
+    fi
+    "$@"
+}
+
+run_pipe() {
+    local command_str="$1"
+    if [ "$DRY_RUN" -eq 1 ]; then
+        echo "[dry-run] $command_str"
+        return 0
+    fi
+    bash -o pipefail -c "$command_str"
+}
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --dry-run)
+            DRY_RUN=1
+            ;;
+        --skip-upgrade)
+            SKIP_UPGRADE=1
+            ;;
+        --help|-h)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "Error: unknown option '$1'"
+            usage
+            exit 1
+            ;;
+    esac
+    shift
+done
 
 # Start of the script
 echo "################## Updating Linux ##################"
 echo ""
-sudo apt-get update 
-sudo NEEDRESTART_MODE=a apt-get upgrade --yes
+run_cmd sudo apt-get update
+if [ "$SKIP_UPGRADE" -eq 1 ]; then
+    echo "Skipping apt upgrade (--skip-upgrade)."
+else
+    run_cmd sudo NEEDRESTART_MODE=a apt-get upgrade --yes
+fi
 
 
 echo ""
 echo "################## Installing essential tools ##################"
 echo ""
-sudo NEEDRESTART_MODE=a apt-get install -y curl git vim snmp snmpd
+run_cmd sudo NEEDRESTART_MODE=a apt-get install -y curl git vim snmp snmpd
 
 
 echo ""
@@ -28,9 +90,53 @@ echo ""
 echo "This step installs K3s, a lightweight Kubernetes distribution."
 echo ""
 # Set KUBECONFIG for all users by creating a script in /etc/profile.d/
-grep -qxF 'KUBECONFIG="/etc/rancher/k3s/k3s.yaml"' /etc/environment || echo 'KUBECONFIG="/etc/rancher/k3s/k3s.yaml"' >> /etc/environment
+if ! sudo grep -qxF 'KUBECONFIG="/etc/rancher/k3s/k3s.yaml"' /etc/environment; then
+    run_pipe "echo 'KUBECONFIG=\"/etc/rancher/k3s/k3s.yaml\"' | sudo tee -a /etc/environment >/dev/null"
+fi
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-curl -fsSL "$K3S_INSTALL_SCRIPT" | sudo INSTALL_K3S_BIN_DIR="$BIN_DIR" sh -
+if [ -n "$K3S_VERSION" ]; then
+    run_pipe "curl -fsSL '$K3S_INSTALL_SCRIPT' | sudo INSTALL_K3S_BIN_DIR='$BIN_DIR' INSTALL_K3S_CHANNEL='$K3S_CHANNEL' INSTALL_K3S_VERSION='$K3S_VERSION' sh -"
+else
+    run_pipe "curl -fsSL '$K3S_INSTALL_SCRIPT' | sudo INSTALL_K3S_BIN_DIR='$BIN_DIR' INSTALL_K3S_CHANNEL='$K3S_CHANNEL' sh -"
+fi
+
+if [ "$DRY_RUN" -eq 1 ]; then
+    echo "[dry-run] Skipping K3s service/API readiness checks."
+else
+    echo "Waiting for K3s service to become active..."
+    k3s_service_ready=0
+    for _ in $(seq 1 30); do
+        if sudo systemctl is-active --quiet k3s; then
+            k3s_service_ready=1
+            break
+        fi
+        sleep 2
+    done
+
+    if [ "$k3s_service_ready" -ne 1 ]; then
+        echo "Error: K3s service did not become active in time."
+        sudo systemctl status k3s --no-pager || true
+        exit 1
+    fi
+
+    echo "Waiting for Kubernetes API readiness..."
+    k3s_api_ready=0
+    for _ in $(seq 1 45); do
+        if sudo k3s kubectl get nodes >/dev/null 2>&1; then
+            k3s_api_ready=1
+            break
+        fi
+        sleep 2
+    done
+
+    if [ "$k3s_api_ready" -ne 1 ]; then
+        echo "Error: Kubernetes API did not become ready in time."
+        sudo k3s kubectl get nodes -o wide || true
+        exit 1
+    fi
+
+    sudo k3s kubectl get nodes -o wide
+fi
 echo ""
 
 
@@ -40,45 +146,92 @@ echo "This step installs K9s, a terminal-based Kubernetes dashboard."
 echo ""
 
 # make K9S usable by all users
-curl -fsSL "$K9S_INSTALL_SCRIPT" | sh -
-K9S_PATH=$(command -v k9s || true)
-if [ -n "$K9S_PATH" ]; then
-    sudo mv "$K9S_PATH" "/usr/local/bin/k9s"
+if [ -n "$K9S_VERSION" ]; then
+    K9S_ARCH=$(uname -m)
+    case "$K9S_ARCH" in
+        x86_64|amd64)
+            K9S_ARCH="amd64"
+            ;;
+        aarch64|arm64)
+            K9S_ARCH="arm64"
+            ;;
+        *)
+            echo "Error: unsupported architecture for pinned K9s install: $K9S_ARCH"
+            exit 1
+            ;;
+    esac
+
+    TMP_K9S_DIR=$(mktemp -d)
+    run_cmd curl -fsSL -o "$TMP_K9S_DIR/k9s.tar.gz" "https://github.com/derailed/k9s/releases/download/v${K9S_VERSION#v}/k9s_Linux_${K9S_ARCH}.tar.gz"
+    run_cmd tar -xzf "$TMP_K9S_DIR/k9s.tar.gz" -C "$TMP_K9S_DIR"
+    run_cmd sudo install -m 0755 "$TMP_K9S_DIR/k9s" "$BIN_DIR/k9s"
+    run_cmd rm -rf "$TMP_K9S_DIR"
+else
+    run_pipe "curl -fsSL '$K9S_INSTALL_SCRIPT' | sh -"
+    K9S_PATH=$(command -v k9s || true)
+    if [ -z "$K9S_PATH" ] && [ -x "$HOME/.local/bin/k9s" ]; then
+        K9S_PATH="$HOME/.local/bin/k9s"
+    fi
+
+    if [ "$DRY_RUN" -eq 0 ] && [ -z "$K9S_PATH" ]; then
+        echo "Error: k9s binary not found after install."
+        exit 1
+    fi
+
+    if [ "$DRY_RUN" -eq 1 ]; then
+        echo "[dry-run] sudo install -m 0755 <k9s_path> $BIN_DIR/k9s"
+    else
+        run_cmd sudo install -m 0755 "$K9S_PATH" "$BIN_DIR/k9s"
+    fi
 fi
-sudo chmod +x /usr/local/bin/k9s
+
+if [ "$DRY_RUN" -eq 0 ] && [ ! -x "$BIN_DIR/k9s" ]; then
+    echo "Error: k9s install failed; binary missing at $BIN_DIR/k9s"
+    exit 1
+fi
+
+if [ "$DRY_RUN" -eq 1 ]; then
+    echo "[dry-run] $BIN_DIR/k9s version | head -n 1"
+else
+    "$BIN_DIR/k9s" version | head -n 1 || true
+fi
 
 echo "################## Downloading and installing Helm ##################"
 echo ""
 echo "This step installs Helm, the Kubernetes package manager."
 echo ""
-curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | sudo bash
+if [ -n "$HELM_VERSION" ]; then
+    run_pipe "curl -fsSL '$HELM_INSTALL_SCRIPT' | sudo DESIRED_VERSION='v${HELM_VERSION#v}' bash"
+else
+    run_pipe "curl -fsSL '$HELM_INSTALL_SCRIPT' | sudo bash"
+fi
 echo ""
 
 echo "################## Fetching LibreNMS Helm Repo ##################"
 echo ""
 echo "This step fetches the LibreNMS Helm chart from the repository."
 echo ""
-sudo mkdir -p "$LNMS_DIR/chart" "$LNMS_DIR/vault"
+run_cmd sudo mkdir -p "$LNMS_DIR/chart" "$LNMS_DIR/vault"
 
 if [ ! -d "$LNMS_DIR/vault/LibreNMS-Helm/.git" ]; then
-    sudo git clone --branch "$LNMS_HELM_BRANCH" https://github.com/LoveSkylark/LibreNMS-Helm.git "$LNMS_DIR/vault/LibreNMS-Helm"
+    run_cmd sudo git clone --branch "$LNMS_HELM_BRANCH" https://github.com/LoveSkylark/LibreNMS-Helm.git "$LNMS_DIR/vault/LibreNMS-Helm"
 else
-    sudo git -C "$LNMS_DIR/vault/LibreNMS-Helm" fetch origin
-    sudo git -C "$LNMS_DIR/vault/LibreNMS-Helm" checkout "$LNMS_HELM_BRANCH"
-    sudo git -C "$LNMS_DIR/vault/LibreNMS-Helm" pull --ff-only origin "$LNMS_HELM_BRANCH"
+    run_cmd sudo git -C "$LNMS_DIR/vault/LibreNMS-Helm" fetch origin
+    run_cmd sudo git -C "$LNMS_DIR/vault/LibreNMS-Helm" checkout "$LNMS_HELM_BRANCH"
+    run_cmd sudo git -C "$LNMS_DIR/vault/LibreNMS-Helm" pull --ff-only origin "$LNMS_HELM_BRANCH"
 fi
 
 if [ ! -d "$LNMS_DIR/vault/LibreNMS-Installer/.git" ]; then
-    sudo git clone https://github.com/LoveSkylark/LibreNMS-Installer.git "$LNMS_DIR/vault/LibreNMS-Installer"
+    run_cmd sudo git clone https://github.com/LoveSkylark/LibreNMS-Installer.git "$LNMS_DIR/vault/LibreNMS-Installer"
 else
-    sudo git -C "$LNMS_DIR/vault/LibreNMS-Installer" pull --ff-only
+    run_cmd sudo git -C "$LNMS_DIR/vault/LibreNMS-Installer" pull --ff-only
 fi
 
 if [ "$ENABLE_WEATHERMAP" = "true" ]; then
     if [ ! -d "$LNMS_DIR/vault/LibreNMS-Weathermap-template/.git" ]; then
-        sudo git clone https://github.com/LoveSkylark/LibreNMS-Weathermap-template.git "$LNMS_DIR/vault/LibreNMS-Weathermap-template"
+        run_cmd sudo git clone https://github.com/LoveSkylark/LibreNMS-Weathermap-template.git "$LNMS_DIR/vault/LibreNMS-Weathermap-template"
     else
-        sudo git -C "$LNMS_DIR/vault/LibreNMS-Weathermap-template" pull --ff-only
+        run_cmd sudo git -C "$LNMS_DIR/vault/LibreNMS-Weathermap-template" pull --ff-only
     fi
 else
     echo "Skipping Weathermap template repository sync (ENABLE_WEATHERMAP=$ENABLE_WEATHERMAP)."
@@ -89,14 +242,14 @@ echo ""
 echo "  "
 echo ""
 if [ ! -f "$LNMS_DIR/lnms-config.yaml" ]; then
-    sudo cp "$LNMS_DIR/vault/LibreNMS-Installer/config/lnms-config.yaml" "$LNMS_DIR/lnms-config.yaml"
+    run_cmd sudo cp "$LNMS_DIR/vault/LibreNMS-Installer/config/lnms-config.yaml" "$LNMS_DIR/lnms-config.yaml"
 fi
 if [ "$ENABLE_WEATHERMAP" = "true" ]; then
     if [ ! -d "$LNMS_DIR/librenms/application/weathermap/templates" ]; then
-        sudo mkdir -p "$LNMS_DIR/librenms/application/weathermap/templates"
+        run_cmd sudo mkdir -p "$LNMS_DIR/librenms/application/weathermap/templates"
     fi
     if [ -z "$(ls -A "$LNMS_DIR/librenms/application/weathermap/templates" 2>/dev/null)" ]; then
-        sudo cp -r "$LNMS_DIR/vault/LibreNMS-Weathermap-template"/* "$LNMS_DIR/librenms/application/weathermap/"
+        run_cmd sudo cp -r "$LNMS_DIR/vault/LibreNMS-Weathermap-template"/* "$LNMS_DIR/librenms/application/weathermap/"
     fi
 else
     echo "Skipping Weathermap config population (ENABLE_WEATHERMAP=$ENABLE_WEATHERMAP)."
@@ -108,7 +261,7 @@ echo "################## Adding aliases for KUBE & HELM ##################"
 echo ""
 echo "This step sets up convenient aliases for managing Kubernetes and Helm."
 echo ""
-sudo cp -r "$LNMS_DIR/vault/LibreNMS-Installer/profile.d"/* /etc/profile.d/
+run_cmd sudo cp -r "$LNMS_DIR/vault/LibreNMS-Installer/profile.d"/* /etc/profile.d/
 echo ""
 
 
@@ -116,12 +269,12 @@ echo "################## Setting up SNMP for LibreNMS ##################"
 echo ""
 echo "This step configures SNMP for LibreNMS monitoring."
 echo ""
-curl -fsSL -o /tmp/librenms-distro https://raw.githubusercontent.com/librenms/librenms-agent/master/snmp/distro
-sudo install -m 0755 /tmp/librenms-distro /usr/bin/distro
-rm -f /tmp/librenms-distro
-sudo cp "$LNMS_DIR/vault/LibreNMS-Installer/snmpd.conf.d/snmp.conf" /etc/snmp/snmpd.conf.d/snmp.conf
-sudo systemctl restart snmpd
-sudo systemctl enable snmpd
+run_cmd curl -fsSL -o /tmp/librenms-distro https://raw.githubusercontent.com/librenms/librenms-agent/master/snmp/distro
+run_cmd sudo install -m 0755 /tmp/librenms-distro /usr/bin/distro
+run_cmd rm -f /tmp/librenms-distro
+run_cmd sudo cp "$LNMS_DIR/vault/LibreNMS-Installer/snmpd.conf.d/snmp.conf" /etc/snmp/snmpd.conf.d/snmp.conf
+run_cmd sudo systemctl restart snmpd
+run_cmd sudo systemctl enable snmpd
 echo ""
 
 

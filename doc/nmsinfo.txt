@@ -19,6 +19,7 @@ Environment overrides:
 NMS_NO_EDITOR=1 = default non-interactive mode
 NMS_AUTO_ADD_HOST=0 = disable auto host add by default
 NMS_HOST_IP=<ip> = force host IP used for auto add
+NMS_NAMESPACE=<name> = override namespace (default: librenms)
 
 lnms = run LibreNMS CLI inside the dispatcher pod
 

@@ -19,6 +19,11 @@ chmod +x ./LibreNMS-Install
 ./LibreNMS-Install
 ```
 
+Installer run options:
+
+- `./LibreNMS-Install --dry-run` preview actions without changing the system
+- `./LibreNMS-Install --skip-upgrade` skip `apt-get upgrade`
+
 2. Open a new shell session (or source `/etc/profile.d/*.sh`).
 3. Start LibreNMS:
 
@@ -61,9 +66,18 @@ Environment variable overrides:
 - `NMS_NO_EDITOR=1`
 - `NMS_AUTO_ADD_HOST=0`
 - `NMS_HOST_IP=<ip>` force the IP used for auto host add
+- `NMS_NAMESPACE=<namespace>` override the target namespace (default: `librenms`)
+
+Installer version pinning (optional):
+
+- `K3S_CHANNEL=stable` install channel for K3s
+- `K3S_VERSION=<version>` pin K3s version (example: `v1.32.4+k3s1`)
+- `K9S_VERSION=<version>` pin K9s version (example: `v0.40.10`)
+- `HELM_VERSION=<version>` pin Helm version (example: `v3.18.2`)
 
 ## Notes
 
 - The installer is designed to be idempotent for clone/copy steps.
 - Helm operations use namespace `librenms`.
+- Helm shorthand commands (`hin`, `hup`, `hun`) also use `librenms` by default.
 - Update placeholders in `config/lnms-config.yaml` before production use.
