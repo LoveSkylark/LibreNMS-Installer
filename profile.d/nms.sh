@@ -284,6 +284,33 @@ nms() {
         helm list --all-namespaces --filter '^librenms$' -o json 2>/dev/null | awk -F '"' '/"namespace"/ {print $4; exit}'
     }
 
+    ensure_namespace_release_metadata() {
+        local existing_release_name
+        local existing_release_namespace
+
+        if ! kubectl get namespace "$NAMESPACE" >/dev/null 2>&1; then
+            echo "Creating namespace: $NAMESPACE"
+            kubectl create namespace "$NAMESPACE" >/dev/null || return 1
+        fi
+
+        existing_release_name=$(kubectl get namespace "$NAMESPACE" -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-name}' 2>/dev/null || true)
+        existing_release_namespace=$(kubectl get namespace "$NAMESPACE" -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-namespace}' 2>/dev/null || true)
+
+        if [ -n "$existing_release_name" ] && [ "$existing_release_name" != "librenms" ]; then
+            echo "Error: Namespace '$NAMESPACE' is already owned by Helm release '$existing_release_name'."
+            return 1
+        fi
+
+        if [ -n "$existing_release_namespace" ] && [ "$existing_release_namespace" != "$NAMESPACE" ]; then
+            echo "Error: Namespace '$NAMESPACE' has conflicting Helm release namespace annotation '$existing_release_namespace'."
+            return 1
+        fi
+
+        kubectl label namespace "$NAMESPACE" app.kubernetes.io/managed-by=Helm --overwrite >/dev/null || return 1
+        kubectl annotate namespace "$NAMESPACE" meta.helm.sh/release-name=librenms --overwrite >/dev/null || return 1
+        kubectl annotate namespace "$NAMESPACE" meta.helm.sh/release-namespace="$NAMESPACE" --overwrite >/dev/null || return 1
+    }
+
     case "$action" in
         "start")
 
@@ -297,6 +324,8 @@ nms() {
                 return 1
             fi
 
+            ensure_namespace_release_metadata || return 1
+
             if kubectl get deployment librenms -n "$NAMESPACE" >/dev/null 2>&1; then
                 echo "LibreNMS already installed, skipping." 
                 return 
@@ -309,11 +338,7 @@ nms() {
                 vim -f "$LNMS_DIR/lnms-config.yaml" || return 1
             fi
             echo "Installing LibreNMS in namespace [$NAMESPACE] using chart:[$LNMS_DIR/vault/LibreNMS-Helm/] and config:[$LNMS_DIR/lnms-config.yaml]"
-            if kubectl get namespace "$NAMESPACE" >/dev/null 2>&1; then
-                helm install librenms "$LNMS_DIR/vault/LibreNMS-Helm/" -n "$NAMESPACE" -f "$LNMS_DIR/lnms-config.yaml" || return 1
-            else
-                helm install librenms "$LNMS_DIR/vault/LibreNMS-Helm/" -n "$NAMESPACE" --create-namespace -f "$LNMS_DIR/lnms-config.yaml" || return 1
-            fi
+            helm install librenms "$LNMS_DIR/vault/LibreNMS-Helm/" -n "$NAMESPACE" -f "$LNMS_DIR/lnms-config.yaml" || return 1
 
             if [ "$AUTO_ADD_HOST" -eq 1 ] && [ "$AUTO_ADD_HOST_READY" -eq 1 ]; then
                 wait_for_librenms_ready 240 || true
