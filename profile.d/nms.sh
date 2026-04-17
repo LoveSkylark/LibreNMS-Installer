@@ -332,7 +332,7 @@ nms() {
                         echo "   Host $host_ip already exists in LibreNMS, skipping add."
                     else
                         echo "   Adding $host_ip to SNMP..."
-                        lnms device:add -2 -c "$SNMP_COMMUNITY" -r "$SNMP_PORT" -d LibreNMS "$host_ip" || return 1
+                        lnms device:add -2 -c "$SNMP_COMMUNITY" -r "$SNMP_PORT" -d LibreNMS "$host_ip" || true
                     fi
                 else
                     echo "No suitable host IPv4 address could be found for SNMP monitoring."
