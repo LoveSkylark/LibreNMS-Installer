@@ -185,13 +185,13 @@ nms() {
 
     device_already_added() {
         local host_ip="$1"
-        local list_output
+        local devices_output
         
-        # Try to get the device list
-        list_output=$(lnms device:list 2>&1) || return 1
+        # Try to get the device list using report:devices
+        devices_output=$(lnms report:devices 2>&1) || return 1
         
         # Check if the IP appears anywhere in the output
-        if echo "$list_output" | grep -qE "(^|[[:space:]])${host_ip}([[:space:]]|$)"; then
+        if echo "$devices_output" | grep -q "$host_ip"; then
             return 0
         fi
         
@@ -341,7 +341,7 @@ nms() {
                         echo "   Host $host_ip already exists in LibreNMS, skipping add."
                     else
                         echo "   Adding $host_ip to SNMP..."
-                        lnms device:list | head -3
+                        lnms report:devices | head -3
                         if lnms device:add -2 -c "$SNMP_COMMUNITY" -r "$SNMP_PORT" -d LibreNMS "$host_ip" || true; then
                             echo "   Device add completed."
                         fi
