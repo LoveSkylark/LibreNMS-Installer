@@ -5,13 +5,18 @@ alias hall="helm list --all-namespaces"
 
 hin() {
     local ns="${NMS_NAMESPACE:-librenms}"
+    local create_ns_args=()
+
+    if ! kubectl get namespace "$ns" >/dev/null 2>&1; then
+            create_ns_args=(--create-namespace)
+    fi
 
     if [ -z "$2" ]; then
             echo -e "Error, please provide a release name, chart and value file"
     elif [ -z "$3" ]; then
-            helm install "$1" "$2" -n "$ns" --create-namespace
+            helm install "$1" "$2" -n "$ns" "${create_ns_args[@]}"
     else 
-            helm install "$1" "$2" -n "$ns" --create-namespace -f "$3"
+            helm install "$1" "$2" -n "$ns" "${create_ns_args[@]}" -f "$3"
     fi
 }
 
