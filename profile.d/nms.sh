@@ -280,13 +280,6 @@ nms() {
         kubectl get pods -n "$NAMESPACE" --no-headers 2>/dev/null | awk '/lnms-app/ {print $1; exit}'
     }
 
-    ensure_namespace_exists() {
-        if ! kubectl get namespace "$NAMESPACE" >/dev/null 2>&1; then
-            echo "Creating namespace: $NAMESPACE"
-            kubectl create namespace "$NAMESPACE" >/dev/null || return 1
-        fi
-    }
-
     existing_release_namespace() {
         helm list --all-namespaces --filter '^librenms$' -o json 2>/dev/null | awk -F '"' '/"namespace"/ {print $4; exit}'
     }
@@ -304,8 +297,6 @@ nms() {
                 return 1
             fi
 
-            ensure_namespace_exists || return 1
-
             if kubectl get deployment librenms -n "$NAMESPACE" >/dev/null 2>&1; then
                 echo "LibreNMS already installed, skipping." 
                 return 
@@ -318,7 +309,11 @@ nms() {
                 vim -f "$LNMS_DIR/lnms-config.yaml" || return 1
             fi
             echo "Installing LibreNMS in namespace [$NAMESPACE] using chart:[$LNMS_DIR/vault/LibreNMS-Helm/] and config:[$LNMS_DIR/lnms-config.yaml]"
-            helm install librenms "$LNMS_DIR/vault/LibreNMS-Helm/" -n "$NAMESPACE" --create-namespace -f "$LNMS_DIR/lnms-config.yaml" || return 1
+            if kubectl get namespace "$NAMESPACE" >/dev/null 2>&1; then
+                helm install librenms "$LNMS_DIR/vault/LibreNMS-Helm/" -n "$NAMESPACE" -f "$LNMS_DIR/lnms-config.yaml" || return 1
+            else
+                helm install librenms "$LNMS_DIR/vault/LibreNMS-Helm/" -n "$NAMESPACE" --create-namespace -f "$LNMS_DIR/lnms-config.yaml" || return 1
+            fi
 
             if [ "$AUTO_ADD_HOST" -eq 1 ] && [ "$AUTO_ADD_HOST_READY" -eq 1 ]; then
                 wait_for_librenms_ready 240 || true
