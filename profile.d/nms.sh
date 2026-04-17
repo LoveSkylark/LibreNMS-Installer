@@ -284,25 +284,10 @@ nms() {
         helm list --all-namespaces --filter '^librenms$' -o json 2>/dev/null | awk -F '"' '/"namespace"/ {print $4; exit}'
     }
 
-    ensure_namespace_ready_for_helm() {
-        local existing_release_name
-        local resource_count
-
-        existing_release_name=$(kubectl get namespace "$NAMESPACE" -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-name}' 2>/dev/null || true)
-
-        if [ -z "$existing_release_name" ] && kubectl get namespace "$NAMESPACE" >/dev/null 2>&1; then
-            resource_count=$(kubectl get all -n "$NAMESPACE" --no-headers 2>/dev/null | wc -l)
-            if [ "$resource_count" -eq 0 ]; then
-                echo "Deleting unmanaged namespace '$NAMESPACE' to allow Helm to recreate it cleanly..."
-                kubectl delete namespace "$NAMESPACE" --ignore-not-found >/dev/null || return 1
-                sleep 2
-            else
-                echo "Error: Namespace '$NAMESPACE' exists but is not managed by Helm and contains resources. Clean manually or use NMS_NAMESPACE."
-                return 1
-            fi
-        elif [ -n "$existing_release_name" ] && [ "$existing_release_name" != "librenms" ]; then
-            echo "Error: Namespace '$NAMESPACE' is owned by Helm release '$existing_release_name'."
-            return 1
+    ensure_namespace_exists() {
+        if ! kubectl get namespace "$NAMESPACE" >/dev/null 2>&1; then
+            echo "Creating namespace: $NAMESPACE"
+            kubectl create namespace "$NAMESPACE" >/dev/null || return 1
         fi
     }
 
@@ -319,7 +304,7 @@ nms() {
                 return 1
             fi
 
-            ensure_namespace_ready_for_helm || return 1
+            ensure_namespace_exists || return 1
 
             if kubectl get deployment librenms -n "$NAMESPACE" >/dev/null 2>&1; then
                 echo "LibreNMS already installed, skipping." 
@@ -333,7 +318,7 @@ nms() {
                 vim -f "$LNMS_DIR/lnms-config.yaml" || return 1
             fi
             echo "Installing LibreNMS in namespace [$NAMESPACE] using chart:[$LNMS_DIR/vault/LibreNMS-Helm/] and config:[$LNMS_DIR/lnms-config.yaml]"
-            helm install librenms "$LNMS_DIR/vault/LibreNMS-Helm/" -n "$NAMESPACE" --create-namespace -f "$LNMS_DIR/lnms-config.yaml" || return 1
+            helm install librenms "$LNMS_DIR/vault/LibreNMS-Helm/" -n "$NAMESPACE" -f "$LNMS_DIR/lnms-config.yaml" || return 1
 
             if [ "$AUTO_ADD_HOST" -eq 1 ] && [ "$AUTO_ADD_HOST_READY" -eq 1 ]; then
                 wait_for_librenms_ready 240 || true
