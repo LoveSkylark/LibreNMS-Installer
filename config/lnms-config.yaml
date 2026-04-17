@@ -54,7 +54,6 @@ smokeping:
 
 oxidized:
   enable: true
-  image: "oxidized/oxidized:0.29.1-12-gdab52d0"
   host:
     FQDN: "ox.test.local"
   credentials:
@@ -66,26 +65,19 @@ oxidized:
     core:
       user: "oxidized-user"
       password: "change-me-oxidized-password"
-    G1:
-      user: ""
-      password: ""
-      string: "/^ox-group-1/"
-    G2:
-      user: ""
-      password: ""
-      string: "/^ox-group-2/"
-    G3:
-      user: ""
-      password: ""
-      string: "/^ox-group-3/"
-    G4:
-      user: ""
-      password: ""
-      string: "/^ox-group-4/"
-    G5:
-      user: ""
-      password: ""
-      string: "/^ox-group-5/"
+    # Optional group examples.
+    # Include non-core groups only when user, password, and string are all set.
+    #G1:
+    #  user: "branch-ops-user"
+    #  password: "change-me-branch-password"
+    #  string: "ox-group-1"
+    #  var: ""
+
+    #Telnet:
+    #  user: "dc-ops-user"
+    #  password: "change-me-dc-password"
+    #  string: "ox-group-2"
+    #  var: ""
 
 xmatters:
   enable: false
