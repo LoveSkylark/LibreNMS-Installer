@@ -90,7 +90,9 @@ echo ""
 echo "This step installs K3s, a lightweight Kubernetes distribution."
 echo ""
 # Set KUBECONFIG for all users by creating a script in /etc/profile.d/
-if ! sudo grep -qxF 'KUBECONFIG="/etc/rancher/k3s/k3s.yaml"' /etc/environment; then
+if [ "$DRY_RUN" -eq 1 ]; then
+    echo "[dry-run] sudo grep -qxF 'KUBECONFIG=\"/etc/rancher/k3s/k3s.yaml\"' /etc/environment || echo 'KUBECONFIG=\"/etc/rancher/k3s/k3s.yaml\"' | sudo tee -a /etc/environment >/dev/null"
+elif ! sudo grep -qxF 'KUBECONFIG="/etc/rancher/k3s/k3s.yaml"' /etc/environment; then
     run_pipe "echo 'KUBECONFIG=\"/etc/rancher/k3s/k3s.yaml\"' | sudo tee -a /etc/environment >/dev/null"
 fi
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
