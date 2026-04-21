@@ -10,9 +10,26 @@ global:
     name: "Example Company"
 
 ingress:
-  # You need to install a cert if your turn on HTTPS:
-  # nms cert <certificate-file> <key-file>
+  # For manual TLS you can create a secret first:
+  # kubectl create secret tls https-cert --cert=<certificate-file> --key=<key-file> --namespace librenms
   https: false
+  className: "traefik"
+  redirectToHttps:
+    enabled: false
+  tls:
+    existingSecretName: ""
+    secretName: "https-cert"
+  letsEncrypt:
+    enabled: false
+    createIssuer: false
+    issuerKind: "ClusterIssuer"
+    issuerName: "letsencrypt-prod"
+    email: ""
+    environment: "production"
+    privateKeySecretName: "letsencrypt-account-key"
+    server:
+      production: "https://acme-v02.api.letsencrypt.org/directory"
+      staging: "https://acme-staging-v02.api.letsencrypt.org/directory"
 
 storage:
   path: "/data/"
@@ -81,7 +98,8 @@ oxidized:
 
 xmatters:
   enable: false
-  agent: false
-  URL: "company.xmatters.com"
-  APIkey: ""
-  APIsecret: ""
+  agent:
+    enable: false
+    URL: "company.xmatters.com"
+    APIkey: ""
+    APIsecret: ""
