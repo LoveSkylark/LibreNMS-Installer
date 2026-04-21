@@ -81,6 +81,7 @@ oxidized:
 
 xmatters:
   enable: false
+  agent: false
   URL: "company.xmatters.com"
   APIkey: ""
   APIsecret: ""
