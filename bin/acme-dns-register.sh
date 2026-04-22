@@ -64,41 +64,84 @@ if ! command -v jq >/dev/null 2>&1; then
     exit 1
 fi
 
-if [[ "$ACMEDNS_API" == "https://your-acme-dns-server.example.com" ]]; then
-    CFG_FILE="$LNMS_DIR/lnms-config.yaml"
-    if [ -f "$CFG_FILE" ]; then
-        ACMEDNS_HOST=$(awk '
-            /^ingress:[[:space:]]*$/ { in_ingress=1; next }
-            in_ingress && /^[^[:space:]]/ { in_ingress=0 }
-            in_ingress && /^[[:space:]]{2}letsEncrypt:[[:space:]]*$/ { in_le=1; next }
-            in_ingress && in_le && /^[[:space:]]{2}[A-Za-z0-9_]+:[[:space:]]*$/ { in_le=0 }
-            in_le && /^[[:space:]]{4}acmeDns:[[:space:]]*$/ { in_ad=1; next }
-            in_le && in_ad && /^[[:space:]]{4}[A-Za-z0-9_]+:[[:space:]]*$/ { in_ad=0 }
-            in_ad && /^[[:space:]]{6}host:[[:space:]]*/ {
-                val=substr($0, index($0, ":") + 1)
-                gsub(/^[[:space:]]+|[[:space:]]+$/, "", val)
-                gsub(/^"|"$/, "", val)
-                print val
-                exit
-            }
-        ' "$CFG_FILE" 2>/dev/null)
+extract_acmedns_host_from_yaml() {
+    local cfg_file="$1"
+    awk '
+        /^ingress:[[:space:]]*$/ { in_ingress=1; next }
+        in_ingress && /^[^[:space:]]/ { in_ingress=0 }
+        in_ingress && /^[[:space:]]{2}letsEncrypt:[[:space:]]*$/ { in_le=1; next }
+        in_ingress && in_le && /^[[:space:]]{2}[A-Za-z0-9_]+:[[:space:]]*$/ { in_le=0 }
+        in_le && /^[[:space:]]{4}acmeDns:[[:space:]]*$/ { in_ad=1; next }
+        in_le && in_ad && /^[[:space:]]{4}[A-Za-z0-9_]+:[[:space:]]*$/ { in_ad=0 }
+        in_ad && /^[[:space:]]{6}host:[[:space:]]*/ {
+            val=substr($0, index($0, ":") + 1)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", val)
+            gsub(/^"|"$/, "", val)
+            print val
+            exit
+        }
+    ' "$cfg_file" 2>/dev/null
+}
 
-        if [ -n "$ACMEDNS_HOST" ]; then
-            case "$ACMEDNS_HOST" in
-                http://*|https://*)
-                    ACMEDNS_API="$ACMEDNS_HOST"
-                    ;;
-                *)
-                    ACMEDNS_API="https://$ACMEDNS_HOST"
-                    ;;
-            esac
+is_placeholder_acmedns_host() {
+    local host="${1:-}"
+    case "$host" in
+        ""|auth.domain.com|your-acme-dns-server.example.com)
+            return 0
+            ;;
+    esac
+
+    if [[ "$host" =~ example\.(com|org|net)$ ]] || [[ "$host" =~ ^(test|dev|local)\. ]]; then
+        return 0
+    fi
+
+    return 1
+}
+
+if [[ "$ACMEDNS_API" == "https://your-acme-dns-server.example.com" ]]; then
+    ACMEDNS_HOST=""
+    RESOLVED_FROM=""
+    SEARCH_FILES=(
+        "$LNMS_DIR/lnms-config.yaml"
+        "$LNMS_DIR/vault/LibreNMS-Installer/config/lnms-config.yaml"
+        "$LNMS_DIR/vault/LibreNMS-Helm/values.yaml"
+    )
+
+    for CFG_FILE in "${SEARCH_FILES[@]}"; do
+        if [ ! -f "$CFG_FILE" ]; then
+            continue
         fi
+
+        ACMEDNS_HOST=$(extract_acmedns_host_from_yaml "$CFG_FILE")
+        if [ -n "$ACMEDNS_HOST" ]; then
+            if is_placeholder_acmedns_host "$ACMEDNS_HOST"; then
+                continue
+            fi
+
+            RESOLVED_FROM="$CFG_FILE"
+            break
+        fi
+    done
+
+    if [ -n "$ACMEDNS_HOST" ]; then
+        case "$ACMEDNS_HOST" in
+            http://*|https://*)
+                ACMEDNS_API="$ACMEDNS_HOST"
+                ;;
+            *)
+                ACMEDNS_API="https://$ACMEDNS_HOST"
+                ;;
+        esac
+        echo "Using ACME-DNS host from $RESOLVED_FROM"
     fi
 fi
 
 if [[ "$ACMEDNS_API" == "https://your-acme-dns-server.example.com" ]]; then
     echo "Error: ACMEDNS_API is still set to the placeholder URL."
-    echo "Set ACMEDNS_API or configure ingress.letsEncrypt.acmeDns.host in $LNMS_DIR/lnms-config.yaml and rerun."
+    echo "Set ACMEDNS_API or configure ingress.letsEncrypt.acmeDns.host in one of these files:"
+    echo "  - $LNMS_DIR/lnms-config.yaml"
+    echo "  - $LNMS_DIR/vault/LibreNMS-Installer/config/lnms-config.yaml"
+    echo "  - $LNMS_DIR/vault/LibreNMS-Helm/values.yaml"
     exit 1
 fi
 
