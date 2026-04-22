@@ -420,25 +420,83 @@ nms() {
     import_acme_dns_credentials() {
         local creds_file="$LNMS_DIR/certs/acme-dns-account.json"
         local secret_name="acme-dns-credentials"
+        local issuer_kind="ClusterIssuer"
+        local cfg="$LNMS_DIR/lnms-config.yaml"
+
+        ensure_secret_in_namespace() {
+            local target_ns="$1"
+
+            if ! kubectl get namespace "$target_ns" >/dev/null 2>&1; then
+                return 0
+            fi
+
+            if kubectl get secret "$secret_name" -n "$target_ns" >/dev/null 2>&1; then
+                return 0
+            fi
+
+            if kubectl create secret generic "$secret_name" \
+                --from-file="acme-dns-account.json=$creds_file" \
+                -n "$target_ns" >/dev/null 2>&1; then
+                echo "ACME-DNS credentials imported into namespace $target_ns."
+                return 0
+            fi
+
+            echo "Warning: failed to import ACME-DNS credentials into namespace $target_ns."
+            return 0
+        }
 
         if [ ! -f "$creds_file" ]; then
             return 0
         fi
 
-        if kubectl get secret "$secret_name" -n "$NAMESPACE" >/dev/null 2>&1; then
-            return 0
+        if [ -f "$cfg" ]; then
+            secret_name=$(awk '
+                /^ingress:[[:space:]]*$/ { in_ingress=1; next }
+                in_ingress && /^[^[:space:]]/ { in_ingress=0 }
+                in_ingress && /^[[:space:]]{2}letsEncrypt:[[:space:]]*$/ { in_le=1; next }
+                in_ingress && in_le && /^[[:space:]]{2}[A-Za-z0-9_]+:[[:space:]]*$/ { in_le=0 }
+                in_le && /^[[:space:]]{4}acmeDns:[[:space:]]*$/ { in_ad=1; next }
+                in_le && in_ad && /^[[:space:]]{4}[A-Za-z0-9_]+:[[:space:]]*$/ { in_ad=0 }
+                in_ad && /^[[:space:]]{6}accountSecretName:[[:space:]]*/ {
+                    val=substr($0, index($0, ":") + 1)
+                    sub(/[[:space:]]+#.*$/, "", val)
+                    gsub(/^[[:space:]]+|[[:space:]]+$/, "", val)
+                    gsub(/^"|"$/, "", val)
+                    print val
+                    exit
+                }
+            ' "$cfg" 2>/dev/null)
+
+            issuer_kind=$(awk '
+                /^ingress:[[:space:]]*$/ { in_ingress=1; next }
+                in_ingress && /^[^[:space:]]/ { in_ingress=0 }
+                in_ingress && /^[[:space:]]{2}letsEncrypt:[[:space:]]*$/ { in_le=1; next }
+                in_ingress && in_le && /^[[:space:]]{2}[A-Za-z0-9_]+:[[:space:]]*$/ { in_le=0 }
+                in_le && /^[[:space:]]{4}issuerKind:[[:space:]]*/ {
+                    val=substr($0, index($0, ":") + 1)
+                    sub(/[[:space:]]+#.*$/, "", val)
+                    gsub(/^[[:space:]]+|[[:space:]]+$/, "", val)
+                    gsub(/^"|"$/, "", val)
+                    print val
+                    exit
+                }
+            ' "$cfg" 2>/dev/null)
+        fi
+
+        if [ -z "$secret_name" ]; then
+            secret_name="acme-dns-credentials"
         fi
 
         echo "Importing ACME-DNS credentials from $creds_file..."
-        if kubectl create secret generic "$secret_name" \
-            --from-file="acme-dns-account.json=$creds_file" \
-            -n "$NAMESPACE" >/dev/null 2>&1; then
-            echo "ACME-DNS credentials imported successfully."
-            return 0
-        else
-            echo "Warning: failed to import ACME-DNS credentials. Continuing anyway."
-            return 0
-        fi
+        ensure_secret_in_namespace "$NAMESPACE"
+
+        case "${issuer_kind:-ClusterIssuer}" in
+            ClusterIssuer|clusterissuer)
+                ensure_secret_in_namespace "cert-manager"
+                ;;
+        esac
+
+        return 0
     }
 
     case "$action" in
