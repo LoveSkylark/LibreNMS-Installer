@@ -61,6 +61,7 @@ Automatic TLS prerequisites:
 
 - During `./LibreNMS-Install`, the installer reads `ingress.*` from `lnms-config.yaml`.
 - If `ingress.https=true`, `ingress.letsEncrypt.enabled=true`, and `ingress.tls.existingSecretName` is empty, it installs/updates `cert-manager` (cluster infrastructure only).
+- `nms start`, `nms edit`, and `nms update` re-check the current `lnms-config.yaml` before Helm install/upgrade and bootstrap `cert-manager` first when the values require it.
 - `Issuer`/`ClusterIssuer`/`Certificate` resources should be managed in LibreNMS-Helm manifests, not in `nms` helper commands.
 - See [HELM-TLS-DEPLOYMENT.md](doc/HELM-TLS-DEPLOYMENT.md) for detailed Helm chart implementation instructions (templates, values, ACME-DNS setup).
 

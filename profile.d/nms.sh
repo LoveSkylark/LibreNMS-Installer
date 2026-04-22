@@ -43,6 +43,107 @@ lnms() {
     kubectl exec --namespace="$namespace" --stdin --tty "$target_pod" -c "$target_container" -- lnms "$@"
 }
 
+ensure_cert_manager_from_values() {
+    local lnms_dir="${1:-/data}"
+    local namespace="${2:-librenms}"
+    local cfg="$lnms_dir/lnms-config.yaml"
+    local ingress_https=""
+    local tls_existing_secret_name=""
+    local le_enabled=""
+
+    normalize_bool() {
+        local raw="${1:-}"
+        raw=$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]')
+        case "$raw" in
+            true|yes|on|1)
+                echo "true"
+                ;;
+            *)
+                echo "false"
+                ;;
+        esac
+    }
+
+    if [ ! -f "$cfg" ]; then
+        echo "Skipping cert-manager setup: values file not found at $cfg"
+        return 0
+    fi
+
+    ingress_https=$(awk '
+        /^ingress:[[:space:]]*$/ { in_ingress=1; next }
+        in_ingress && /^[^[:space:]]/ { in_ingress=0 }
+        in_ingress && /^[[:space:]]{2}https:[[:space:]]*/ {
+            val=$2
+            gsub(/"/, "", val)
+            print val
+            exit
+        }
+    ' "$cfg" 2>/dev/null)
+
+    tls_existing_secret_name=$(awk '
+        /^ingress:[[:space:]]*$/ { in_ingress=1; next }
+        in_ingress && /^[^[:space:]]/ { in_ingress=0 }
+        in_ingress && /^[[:space:]]{2}tls:[[:space:]]*$/ { in_tls=1; next }
+        in_ingress && in_tls && /^[[:space:]]{2}[A-Za-z0-9_]+:[[:space:]]*$/ { in_tls=0 }
+        in_tls && /^[[:space:]]{4}existingSecretName:[[:space:]]*/ {
+            val=substr($0, index($0, ":") + 1)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", val)
+            gsub(/^"|"$/, "", val)
+            print val
+            exit
+        }
+    ' "$cfg" 2>/dev/null)
+
+    le_enabled=$(awk '
+        /^ingress:[[:space:]]*$/ { in_ingress=1; next }
+        in_ingress && /^[^[:space:]]/ { in_ingress=0 }
+        in_ingress && /^[[:space:]]{2}letsEncrypt:[[:space:]]*$/ { in_le=1; next }
+        in_ingress && in_le && /^[[:space:]]{2}[A-Za-z0-9_]+:[[:space:]]*$/ { in_le=0 }
+        in_le && /^[[:space:]]{4}enabled:[[:space:]]*/ {
+            val=$2
+            gsub(/"/, "", val)
+            print val
+            exit
+        }
+    ' "$cfg" 2>/dev/null)
+
+    if [ "$(normalize_bool "$ingress_https")" != "true" ]; then
+        echo "Skipping cert-manager setup: ingress.https is not enabled."
+        return 0
+    fi
+
+    if [ -n "$tls_existing_secret_name" ]; then
+        echo "Skipping cert-manager setup: ingress.tls.existingSecretName is set ($tls_existing_secret_name)."
+        return 0
+    fi
+
+    if [ "$(normalize_bool "$le_enabled")" != "true" ]; then
+        echo "Skipping cert-manager setup: ingress.letsEncrypt.enabled is not enabled."
+        return 0
+    fi
+
+    echo "Preparing cert-manager controller from values file..."
+
+    if ! kubectl get namespace cert-manager >/dev/null 2>&1; then
+        kubectl create namespace cert-manager >/dev/null || return 1
+    fi
+
+    helm repo add jetstack https://charts.jetstack.io >/dev/null 2>&1 || true
+    helm repo update >/dev/null || return 1
+
+    if helm status cert-manager -n cert-manager >/dev/null 2>&1; then
+        helm upgrade cert-manager jetstack/cert-manager -n cert-manager --set crds.enabled=true --wait --timeout 5m || return 1
+    else
+        helm install cert-manager jetstack/cert-manager -n cert-manager --set crds.enabled=true --wait --timeout 5m || return 1
+    fi
+
+    kubectl rollout status deployment/cert-manager -n cert-manager --timeout=180s || return 1
+    kubectl rollout status deployment/cert-manager-cainjector -n cert-manager --timeout=180s || return 1
+    kubectl rollout status deployment/cert-manager-webhook -n cert-manager --timeout=180s || return 1
+
+    echo "cert-manager ready for namespace $namespace."
+}
+
 nms() {
     local action="$1"
     shift || true
@@ -358,6 +459,8 @@ nms() {
             else
                 vim -f "$LNMS_DIR/lnms-config.yaml" || return 1
             fi
+            ensure_cert_manager_from_values "$LNMS_DIR" "$NAMESPACE" || return 1
+            import_acme_dns_credentials
             echo "Installing LibreNMS in namespace [$NAMESPACE] using chart:[$LNMS_DIR/vault/LibreNMS-Helm/] and config:[$LNMS_DIR/lnms-config.yaml]"
             helm install librenms "$LNMS_DIR/vault/LibreNMS-Helm/" -n "$NAMESPACE" -f "$LNMS_DIR/lnms-config.yaml" || return 1
 
@@ -402,6 +505,7 @@ nms() {
             else
                 vim -f "$LNMS_DIR/lnms-config.yaml" || return 1
             fi
+            ensure_cert_manager_from_values "$LNMS_DIR" "$NAMESPACE" || return 1
             import_acme_dns_credentials
             helm upgrade librenms "$LNMS_DIR/vault/LibreNMS-Helm/" -n "$NAMESPACE" -f "$LNMS_DIR/lnms-config.yaml" || return 1
             ;;
@@ -409,6 +513,7 @@ nms() {
         "update")
 
             echo "Upgrading LibreNMS installation..."
+            ensure_cert_manager_from_values "$LNMS_DIR" "$NAMESPACE" || return 1
             import_acme_dns_credentials
             helm upgrade librenms "$LNMS_DIR/vault/LibreNMS-Helm/" -n "$NAMESPACE" -f "$LNMS_DIR/lnms-config.yaml" || return 1
             ;;

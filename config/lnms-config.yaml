@@ -1,7 +1,7 @@
 #########################################################
 ##  Edit this file to configure the monitoring cluster ##
 ##  whole configuration template can be found under:   ##
-##        LibreNMS-Helm/librenms/values.yaml           ##
+##        LibreNMS-Helm/values.yaml                    ##
 #########################################################
 
 global:
@@ -21,6 +21,7 @@ ingress:
     secretName: "https-cert"
   letsEncrypt:
     enabled: false
+    createIssuer: true
     email: "admin@example.domain.com"
     acmeDns:
       host: "auth.domain.com"
