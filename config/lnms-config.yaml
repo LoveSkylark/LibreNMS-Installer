@@ -66,8 +66,9 @@ smokeping:
     FQDN: "smokeping.test.local"
 
 oxidized:
-  enable: true
+  enable: false
   host:
+    # Use a public DNS name here if you want Oxidized covered by Let's Encrypt.
     FQDN: "ox.test.local"
   credentials:
     # token needs to be generated inside LibreNMS. Run "nms edit"
