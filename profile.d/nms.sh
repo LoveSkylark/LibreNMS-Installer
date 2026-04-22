@@ -87,6 +87,7 @@ ensure_cert_manager_from_values() {
         in_ingress && in_tls && /^[[:space:]]{2}[A-Za-z0-9_]+:[[:space:]]*$/ { in_tls=0 }
         in_tls && /^[[:space:]]{4}existingSecretName:[[:space:]]*/ {
             val=substr($0, index($0, ":") + 1)
+            sub(/[[:space:]]+#.*$/, "", val)
             gsub(/^[[:space:]]+|[[:space:]]+$/, "", val)
             gsub(/^"|"$/, "", val)
             print val
@@ -408,6 +409,14 @@ nms() {
         fi
     }
 
+    ensure_namespace_helm_metadata() {
+        # Some clusters already have the namespace created manually.
+        # Pre-label/annotate it so Helm can adopt a Namespace manifest if present.
+        kubectl label namespace "$NAMESPACE" app.kubernetes.io/managed-by=Helm --overwrite >/dev/null || return 1
+        kubectl annotate namespace "$NAMESPACE" meta.helm.sh/release-name=librenms --overwrite >/dev/null || return 1
+        kubectl annotate namespace "$NAMESPACE" meta.helm.sh/release-namespace="$NAMESPACE" --overwrite >/dev/null || return 1
+    }
+
     import_acme_dns_credentials() {
         local creds_file="$LNMS_DIR/certs/acme-dns-account.json"
         local secret_name="acme-dns-credentials"
@@ -446,6 +455,7 @@ nms() {
             fi
 
             ensure_namespace_exists || return 1
+            ensure_namespace_helm_metadata || return 1
             import_acme_dns_credentials
 
             if kubectl get deployment librenms -n "$NAMESPACE" >/dev/null 2>&1; then
@@ -629,6 +639,7 @@ nms() {
                         in_le && in_ad && /^[[:space:]]{4}[A-Za-z0-9_]+:[[:space:]]*$/ { in_ad=0 }
                         in_ad && /^[[:space:]]{6}host:[[:space:]]*/ {
                             val=substr($0, index($0, ":") + 1)
+                            sub(/[[:space:]]+#.*$/, "", val)
                             gsub(/^[[:space:]]+|[[:space:]]+$/, "", val)
                             gsub(/^"|"$/, "", val)
                             print val

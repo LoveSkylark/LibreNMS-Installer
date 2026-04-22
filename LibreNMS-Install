@@ -91,6 +91,7 @@ prepare_tls_requirements_from_values() {
         in_ingress && in_tls && /^[[:space:]]{2}[A-Za-z0-9_]+:[[:space:]]*$/ { in_tls=0 }
         in_tls && /^[[:space:]]{4}existingSecretName:[[:space:]]*/ {
             val=substr($0, index($0, ":") + 1)
+            sub(/[[:space:]]+#.*$/, "", val)
             gsub(/^[[:space:]]+|[[:space:]]+$/, "", val)
             gsub(/^"|"$/, "", val)
             print val

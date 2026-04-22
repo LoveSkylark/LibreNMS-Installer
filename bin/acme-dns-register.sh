@@ -85,6 +85,7 @@ extract_acmedns_host_from_yaml() {
         in_le && in_ad && /^[[:space:]]{4}[A-Za-z0-9_]+:[[:space:]]*$/ { in_ad=0 }
         in_ad && /^[[:space:]]{6}host:[[:space:]]*/ {
             val=substr($0, index($0, ":") + 1)
+            sub(/[[:space:]]+#.*$/, "", val)
             gsub(/^[[:space:]]+|[[:space:]]+$/, "", val)
             gsub(/^"|"$/, "", val)
             print val
