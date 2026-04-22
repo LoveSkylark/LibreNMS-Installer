@@ -46,6 +46,115 @@ run_pipe() {
     bash -o pipefail -c "$command_str"
 }
 
+normalize_bool() {
+    local raw="${1:-}"
+    raw=$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]')
+    case "$raw" in
+        true|yes|on|1)
+            echo "true"
+            ;;
+        *)
+            echo "false"
+            ;;
+    esac
+}
+
+prepare_tls_requirements_from_values() {
+    local cfg="$LNMS_DIR/lnms-config.yaml"
+    local ingress_https=""
+    local tls_existing_secret_name=""
+    local le_enabled=""
+
+    if [ ! -f "$cfg" ]; then
+        echo "Skipping TLS prerequisites: values file not found at $cfg"
+        return 0
+    fi
+
+    ingress_https=$(awk '
+        /^ingress:[[:space:]]*$/ { in_ingress=1; next }
+        in_ingress && /^[^[:space:]]/ { in_ingress=0 }
+        in_ingress && /^[[:space:]]{2}https:[[:space:]]*/ {
+            val=$2
+            gsub(/"/, "", val)
+            print val
+            exit
+        }
+    ' "$cfg" 2>/dev/null)
+
+    tls_existing_secret_name=$(awk '
+        /^ingress:[[:space:]]*$/ { in_ingress=1; next }
+        in_ingress && /^[^[:space:]]/ { in_ingress=0 }
+        in_ingress && /^[[:space:]]{2}tls:[[:space:]]*$/ { in_tls=1; next }
+        in_ingress && in_tls && /^[[:space:]]{2}[A-Za-z0-9_]+:[[:space:]]*$/ { in_tls=0 }
+        in_tls && /^[[:space:]]{4}existingSecretName:[[:space:]]*/ {
+            val=substr($0, index($0, ":") + 1)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", val)
+            gsub(/^"|"$/, "", val)
+            print val
+            exit
+        }
+    ' "$cfg" 2>/dev/null)
+
+    le_enabled=$(awk '
+        /^ingress:[[:space:]]*$/ { in_ingress=1; next }
+        in_ingress && /^[^[:space:]]/ { in_ingress=0 }
+        in_ingress && /^[[:space:]]{2}letsEncrypt:[[:space:]]*$/ { in_le=1; next }
+        in_ingress && in_le && /^[[:space:]]{2}[A-Za-z0-9_]+:[[:space:]]*$/ { in_le=0 }
+        in_le && /^[[:space:]]{4}enabled:[[:space:]]*/ {
+            val=$2
+            gsub(/"/, "", val)
+            print val
+            exit
+        }
+    ' "$cfg" 2>/dev/null)
+
+    if [ "$(normalize_bool "$ingress_https")" != "true" ]; then
+        echo "Skipping cert-manager setup: ingress.https is not enabled."
+        return 0
+    fi
+
+    if [ -n "$tls_existing_secret_name" ]; then
+        echo "Skipping cert-manager setup: ingress.tls.existingSecretName is set ($tls_existing_secret_name)."
+        return 0
+    fi
+
+    if [ "$(normalize_bool "$le_enabled")" != "true" ]; then
+        echo "Skipping cert-manager setup: ingress.letsEncrypt.enabled is not enabled."
+        return 0
+    fi
+
+    echo "Preparing cert-manager controller from values file..."
+
+    if [ "$DRY_RUN" -eq 1 ]; then
+        echo "[dry-run] kubectl get namespace cert-manager || kubectl create namespace cert-manager"
+    elif ! kubectl get namespace cert-manager >/dev/null 2>&1; then
+        kubectl create namespace cert-manager >/dev/null || return 1
+    fi
+
+    run_cmd helm repo add jetstack https://charts.jetstack.io
+    run_cmd helm repo update
+
+    if [ "$DRY_RUN" -eq 1 ]; then
+        echo "[dry-run] helm status cert-manager -n cert-manager && helm upgrade cert-manager jetstack/cert-manager -n cert-manager --set crds.enabled=true --wait --timeout 5m || helm install cert-manager jetstack/cert-manager -n cert-manager --set crds.enabled=true --wait --timeout 5m"
+    elif helm status cert-manager -n cert-manager >/dev/null 2>&1; then
+        helm upgrade cert-manager jetstack/cert-manager -n cert-manager --set crds.enabled=true --wait --timeout 5m
+    else
+        helm install cert-manager jetstack/cert-manager -n cert-manager --set crds.enabled=true --wait --timeout 5m
+    fi
+
+    if [ "$DRY_RUN" -eq 1 ]; then
+        echo "[dry-run] kubectl rollout status deployment/cert-manager -n cert-manager --timeout=180s"
+        echo "[dry-run] kubectl rollout status deployment/cert-manager-cainjector -n cert-manager --timeout=180s"
+        echo "[dry-run] kubectl rollout status deployment/cert-manager-webhook -n cert-manager --timeout=180s"
+    else
+        kubectl rollout status deployment/cert-manager -n cert-manager --timeout=180s
+        kubectl rollout status deployment/cert-manager-cainjector -n cert-manager --timeout=180s
+        kubectl rollout status deployment/cert-manager-webhook -n cert-manager --timeout=180s
+    fi
+
+    echo "cert-manager ready. Issuer/ClusterIssuer and Certificate resources should be managed by LibreNMS-Helm templates."
+}
+
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --dry-run)
@@ -213,7 +322,7 @@ echo "################## Fetching LibreNMS Helm Repo ##################"
 echo ""
 echo "This step fetches the LibreNMS Helm chart from the repository."
 echo ""
-run_cmd sudo mkdir -p "$LNMS_DIR/chart" "$LNMS_DIR/vault"
+run_cmd sudo mkdir -p "$LNMS_DIR/chart" "$LNMS_DIR/vault" "$LNMS_DIR/certs"
 
 if [ ! -d "$LNMS_DIR/vault/LibreNMS-Helm/.git" ]; then
     run_cmd sudo git clone --branch "$LNMS_HELM_BRANCH" https://github.com/LoveSkylark/LibreNMS-Helm.git "$LNMS_DIR/vault/LibreNMS-Helm"
@@ -256,6 +365,13 @@ if [ "$ENABLE_WEATHERMAP" = "true" ]; then
 else
     echo "Skipping Weathermap config population (ENABLE_WEATHERMAP=$ENABLE_WEATHERMAP)."
 fi
+
+echo ""
+echo "################## Preparing TLS Prerequisites ##################"
+echo ""
+echo "This step bootstraps cert-manager (cluster prerequisite) from lnms-config.yaml when needed."
+echo ""
+prepare_tls_requirements_from_values
 
 echo ""
 

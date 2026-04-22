@@ -7,9 +7,16 @@ nms preflight = run dependency and cluster checks before install/upgrade
 
 nms status = check LibreNMS pod status
 nms monitor = start k9s
-nms cert = add TLS certificate
+nms cert static <cert> <key> = add TLS certificate (manual/static)
+nms cert register <domain> [output_file] = pre-register ACME-DNS credentials (default output: /data/certs/acme-dns-account.json)
 nms map = generate weather map
 nms help = show this help text
+
+TLS architecture:
+- `nms start/edit/update` does not create cert-manager or issuer resources.
+- `LibreNMS-Install` can bootstrap cert-manager when Let's Encrypt ingress is enabled.
+- Issuer/ClusterIssuer/Certificate resources should be defined in LibreNMS-Helm.
+- See HELM-TLS-DEPLOYMENT.md in this directory for Helm chart templates and implementation guide.
 
 Options for start/edit:
 --non-interactive (-n) = skip opening vim editor
