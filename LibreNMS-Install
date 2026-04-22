@@ -292,7 +292,11 @@ else
     if [ "$DRY_RUN" -eq 1 ]; then
         echo "[dry-run] sudo install -m 0755 <k9s_path> $BIN_DIR/k9s"
     else
-        run_cmd sudo install -m 0755 "$K9S_PATH" "$BIN_DIR/k9s"
+        if [ "$K9S_PATH" = "$BIN_DIR/k9s" ]; then
+            echo "k9s already installed at $BIN_DIR/k9s; skipping copy."
+        else
+            run_cmd sudo install -m 0755 "$K9S_PATH" "$BIN_DIR/k9s"
+        fi
     fi
 fi
 
