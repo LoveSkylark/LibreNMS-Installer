@@ -10,6 +10,7 @@ set -euo pipefail
 ACMEDNS_API="${ACMEDNS_API:-https://your-acme-dns-server.example.com}"
 DOMAIN="${1:-}"
 OUTPUT_FILE="${2:-.account.json}"
+LNMS_DIR="${LNMS_DIR:-/data}"
 
 # No IP restrictions needed - CNAME registration is done manually by DNS team
 ALLOW_FROM='[]'
@@ -64,8 +65,40 @@ if ! command -v jq >/dev/null 2>&1; then
 fi
 
 if [[ "$ACMEDNS_API" == "https://your-acme-dns-server.example.com" ]]; then
+    CFG_FILE="$LNMS_DIR/lnms-config.yaml"
+    if [ -f "$CFG_FILE" ]; then
+        ACMEDNS_HOST=$(awk '
+            /^ingress:[[:space:]]*$/ { in_ingress=1; next }
+            in_ingress && /^[^[:space:]]/ { in_ingress=0 }
+            in_ingress && /^[[:space:]]{2}letsEncrypt:[[:space:]]*$/ { in_le=1; next }
+            in_ingress && in_le && /^[[:space:]]{2}[A-Za-z0-9_]+:[[:space:]]*$/ { in_le=0 }
+            in_le && /^[[:space:]]{4}acmeDns:[[:space:]]*$/ { in_ad=1; next }
+            in_le && in_ad && /^[[:space:]]{4}[A-Za-z0-9_]+:[[:space:]]*$/ { in_ad=0 }
+            in_ad && /^[[:space:]]{6}host:[[:space:]]*/ {
+                val=substr($0, index($0, ":") + 1)
+                gsub(/^[[:space:]]+|[[:space:]]+$/, "", val)
+                gsub(/^"|"$/, "", val)
+                print val
+                exit
+            }
+        ' "$CFG_FILE" 2>/dev/null)
+
+        if [ -n "$ACMEDNS_HOST" ]; then
+            case "$ACMEDNS_HOST" in
+                http://*|https://*)
+                    ACMEDNS_API="$ACMEDNS_HOST"
+                    ;;
+                *)
+                    ACMEDNS_API="https://$ACMEDNS_HOST"
+                    ;;
+            esac
+        fi
+    fi
+fi
+
+if [[ "$ACMEDNS_API" == "https://your-acme-dns-server.example.com" ]]; then
     echo "Error: ACMEDNS_API is still set to the placeholder URL."
-    echo "Set ACMEDNS_API or configure ingress.letsEncrypt.acmeDns.host and run via 'nms cert register'."
+    echo "Set ACMEDNS_API or configure ingress.letsEncrypt.acmeDns.host in $LNMS_DIR/lnms-config.yaml and rerun."
     exit 1
 fi
 
