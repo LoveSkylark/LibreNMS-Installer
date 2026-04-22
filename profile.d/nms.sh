@@ -561,6 +561,28 @@ nms() {
 
         "cert")
 
+            if [ "${1:-}" = "check" ]; then
+                local register_script
+                local register_script_repo
+
+                register_script="$LNMS_DIR/vault/LibreNMS-Installer/bin/acme-dns-register.sh"
+                register_script_repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." >/dev/null 2>&1 && pwd)/bin/acme-dns-register.sh"
+
+                if [ ! -f "$register_script" ] && [ -f "$register_script_repo" ]; then
+                    register_script="$register_script_repo"
+                fi
+
+                if [ ! -f "$register_script" ]; then
+                    echo "Error: ACME-DNS register helper not found."
+                    echo "Expected at: $LNMS_DIR/vault/LibreNMS-Installer/bin/acme-dns-register.sh"
+                    return 1
+                fi
+
+                echo "Checking ACME-DNS configuration..."
+                bash "$register_script" --check
+                return $?
+            fi
+
             if [ "${1:-}" = "register" ]; then
                 local register_domain="${2:-}"
                 local register_output="${3:-$LNMS_DIR/certs/acme-dns-account.json}"
@@ -636,6 +658,7 @@ nms() {
             elif [ -n "${1:-}" ] && [ -z "${2:-}" ]; then
                 echo "Usage:"
                 echo "    nms cert static <cert> <key>"
+                echo "    nms cert check"
                 echo "    nms cert register <domain> [output_file]"
                 return 1
             elif [ -n "${1:-}" ] && [ -n "${2:-}" ]; then
@@ -651,6 +674,7 @@ nms() {
                 echo "    nms cert static /path/to/cert.pem /path/to/cert.key"
                 echo ""
                 echo "ACME-DNS pre-registration option:"
+                echo "    nms cert check"
                 echo "    nms cert register <domain> [output_file]"
                 echo "    Default output_file: $LNMS_DIR/certs/acme-dns-account.json"
                 return 1

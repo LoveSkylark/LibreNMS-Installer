@@ -8,6 +8,12 @@
 set -euo pipefail
 
 ACMEDNS_API="${ACMEDNS_API:-https://your-acme-dns-server.example.com}"
+MODE="register"
+if [ "${1:-}" = "--check" ]; then
+    MODE="check"
+    shift
+fi
+
 DOMAIN="${1:-}"
 OUTPUT_FILE="${2:-.account.json}"
 LNMS_DIR="${LNMS_DIR:-/data}"
@@ -18,6 +24,7 @@ ALLOW_FROM='[]'
 usage() {
     cat <<EOF
 Usage: $0 <domain> [output_file]
+    $0 --check
 
 Pre-register a domain with your ACME-DNS server.
 Generates credentials (account.json) for use in Kubernetes.
@@ -31,6 +38,7 @@ Environment:
 
 Example:
   $0 nms.example.com ./my-nms-account.json
+    $0 --check
 
 Output:
   Creates account.json with:
@@ -51,7 +59,9 @@ EOF
 }
 
 if [ -z "$DOMAIN" ]; then
-    usage
+    if [ "$MODE" = "register" ]; then
+        usage
+    fi
 fi
 
 if ! command -v curl >/dev/null 2>&1; then
@@ -101,6 +111,7 @@ is_placeholder_acmedns_host() {
 if [[ "$ACMEDNS_API" == "https://your-acme-dns-server.example.com" ]]; then
     ACMEDNS_HOST=""
     RESOLVED_FROM=""
+    SCAN_REPORT=""
     SEARCH_FILES=(
         "$LNMS_DIR/lnms-config.yaml"
         "$LNMS_DIR/vault/LibreNMS-Installer/config/lnms-config.yaml"
@@ -109,18 +120,24 @@ if [[ "$ACMEDNS_API" == "https://your-acme-dns-server.example.com" ]]; then
 
     for CFG_FILE in "${SEARCH_FILES[@]}"; do
         if [ ! -f "$CFG_FILE" ]; then
+            SCAN_REPORT+="\n - missing: $CFG_FILE"
             continue
         fi
 
         ACMEDNS_HOST=$(extract_acmedns_host_from_yaml "$CFG_FILE")
-        if [ -n "$ACMEDNS_HOST" ]; then
-            if is_placeholder_acmedns_host "$ACMEDNS_HOST"; then
-                continue
-            fi
-
-            RESOLVED_FROM="$CFG_FILE"
-            break
+        if [ -z "$ACMEDNS_HOST" ]; then
+            SCAN_REPORT+="\n - no acmeDns.host in: $CFG_FILE"
+            continue
         fi
+
+        if is_placeholder_acmedns_host "$ACMEDNS_HOST"; then
+            SCAN_REPORT+="\n - placeholder acmeDns.host ('$ACMEDNS_HOST') in: $CFG_FILE"
+            continue
+        fi
+
+        SCAN_REPORT+="\n - resolved acmeDns.host ('$ACMEDNS_HOST') from: $CFG_FILE"
+        RESOLVED_FROM="$CFG_FILE"
+        break
     done
 
     if [ -n "$ACMEDNS_HOST" ]; then
@@ -138,11 +155,27 @@ fi
 
 if [[ "$ACMEDNS_API" == "https://your-acme-dns-server.example.com" ]]; then
     echo "Error: ACMEDNS_API is still set to the placeholder URL."
+    if [ -n "${SCAN_REPORT:-}" ]; then
+        echo "Resolution details:$SCAN_REPORT"
+    fi
     echo "Set ACMEDNS_API or configure ingress.letsEncrypt.acmeDns.host in one of these files:"
     echo "  - $LNMS_DIR/lnms-config.yaml"
     echo "  - $LNMS_DIR/vault/LibreNMS-Installer/config/lnms-config.yaml"
     echo "  - $LNMS_DIR/vault/LibreNMS-Helm/values.yaml"
     exit 1
+fi
+
+if [ "$MODE" = "check" ]; then
+    echo "ACME-DNS API resolved successfully: $ACMEDNS_API"
+    if [ -n "${RESOLVED_FROM:-}" ]; then
+        echo "Source: $RESOLVED_FROM"
+    elif [ -n "${ACMEDNS_API:-}" ]; then
+        echo "Source: ACMEDNS_API environment variable"
+    fi
+    if [ -n "${SCAN_REPORT:-}" ]; then
+        echo "Resolution details:$SCAN_REPORT"
+    fi
+    exit 0
 fi
 
 echo "=========================================="
