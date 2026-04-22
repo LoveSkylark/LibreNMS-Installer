@@ -37,6 +37,9 @@ ingress:
     server:
       production: "https://acme-v02.api.letsencrypt.org/directory"
       staging: "https://acme-staging-v02.api.letsencrypt.org/directory"
+    acmeDns:
+      host: "your-acme-dns-server.example.com"
+      accountSecretName: "acme-dns-credentials"
 ```
 
 ---
@@ -176,14 +179,14 @@ spec:
 
 ## For ACME-DNS / goacmedns Deployment
 
-If you are using **ACME-DNS** (e.g., hosted at `auth.vist.is`), the issuer must be configured with DNS-01 solver instead of HTTP-01.
+If you are using **ACME-DNS** (e.g., hosted at `your-acme-dns-server.example.com`), the issuer must be configured with DNS-01 solver instead of HTTP-01.
 
 ### Modified ClusterIssuer for ACME-DNS
 
 **File:** `librenms/templates/cert-manager-issuer-acmedns.yaml`
 
 ```yaml
-{{- if and .Values.ingress.https .Values.ingress.letsEncrypt.enabled .Values.ingress.letsEncrypt.createIssuer (not .Values.ingress.tls.existingSecretName) .Values.ingress.letsEncrypt.dnsProvider }}
+{{- if and .Values.ingress.https .Values.ingress.letsEncrypt.enabled .Values.ingress.letsEncrypt.createIssuer (not .Values.ingress.tls.existingSecretName) .Values.ingress.letsEncrypt.acmeDns }}
 apiVersion: cert-manager.io/v1
 kind: {{ .Values.ingress.letsEncrypt.issuerKind | default "ClusterIssuer" }}
 metadata:
@@ -220,21 +223,32 @@ Add to your `lnms-config.yaml`:
 ingress:
   letsEncrypt:
     # ... existing fields ...
-    dnsProvider: "acme-dns"  # or null for HTTP-01
     acmeDns:
-      host: "auth.vist.is"
+      host: "your-acme-dns-server.example.com"
       accountSecretName: "acme-dns-credentials"
 ```
 
 ### Secret Setup for ACME-DNS
 
-Create the ACME-DNS credentials secret before deploying:
+Register your domain and generate the credentials file before deploying:
 
 ```bash
-# Pre-generate account via goacmedns and save account.json
-# Then create the secret:
+nms cert register example.com
+```
+
+By default this writes the credentials file to:
+
+```text
+/data/certs/acme-dns-account.json
+```
+
+After the ACME-DNS CNAME has been registered in DNS, the secret will be created automatically when you run `nms start`.
+
+If you need to manually create it beforehand:
+
+```bash
 kubectl create secret generic acme-dns-credentials \
-  --from-file=acme-dns-account.json=/path/to/.account.json \
+  --from-file=acme-dns-account.json=/data/certs/acme-dns-account.json \
   -n librenms
 ```
 
@@ -242,12 +256,12 @@ The account.json should contain your ACME-DNS registration:
 
 ```json
 {
-    "example.vist.is": {
-        "fulldomain": "7c6eae4d-8805-4f2b-83dc-31dfe877d7cf.auth.vist.is",
+    "example.com": {
+        "fulldomain": "7c6eae4d-8805-4f2b-83dc-31dfe877d7cf.your-acme-dns-server.example.com",
         "subdomain": "7c6eae4d-8805-4f2b-83dc-31dfe877d7cf",
         "username": "xxxxxxxxxxxxx",
         "password": "yyyyyyyyyyyyy",
-        "server_url": "https://auth.vist.is"
+        "server_url": "https://your-acme-dns-server.example.com"
     }
 }
 ```
@@ -263,8 +277,12 @@ The account.json should contain your ACME-DNS registration:
 ./LibreNMS-Install
 
 # This:
-# - Installs cert-manager in cert-manager namespace
-# - Installs helm chart
+# - installs cert-manager in cert-manager namespace when TLS automation is enabled
+# - refreshes profile helpers and supporting files
+# - does not install the LibreNMS Helm release
+
+# Then deploy LibreNMS:
+nms start
 
 # Helm chart creates:
 # - ClusterIssuer/Issuer (if createIssuer=true)
@@ -295,7 +313,7 @@ HTTPS service ready
 If cert-manager provisioning fails, users can still inject a pre-made cert:
 
 ```bash
-nms cert /path/to/cert.pem /path/to/key.pem
+nms cert static /path/to/cert.pem /path/to/key.pem
 ```
 
 This creates/updates the `https-cert` secret directly, bypassing cert-manager.
@@ -342,7 +360,7 @@ kubectl describe ingress librenms-application -n librenms
 | Certificate | LibreNMS-Helm | Namespace |
 | Ingress with TLS annotation | LibreNMS-Helm | Namespace |
 | TLS Secret (auto-populated) | cert-manager | Namespace |
-| Manual TLS Secret (fallback) | `nms cert` command | Namespace |
+| Manual TLS Secret (fallback) | `nms cert static` command | Namespace |
 
 ---
 

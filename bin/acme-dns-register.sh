@@ -1,35 +1,35 @@
 #!/bin/bash
 
 # acme-dns-register.sh
-# Helper to pre-register a domain with corporate ACME-DNS server (auth.vist.is)
+# Helper to pre-register a domain with your ACME-DNS server
 # Generates credentials (account.json) that can be used by Kubernetes/cert-manager
 # for automatic certificate renewal
 
 set -euo pipefail
 
-ACMEDNS_API="${ACMEDNS_API:-https://auth.vist.is}"
+ACMEDNS_API="${ACMEDNS_API:-https://your-acme-dns-server.example.com}"
 DOMAIN="${1:-}"
 OUTPUT_FILE="${2:-.account.json}"
 
-# IP ranges allowed to update DNS records (Sensa AS internal)
-ALLOW_FROM='["10.0.0.0/8","192.168.0.0/16","172.16.0.0/12","185.62.60.0/22","79.171.96.0/21","185.67.180.0/22","185.130.12.0/22"]'
+# No IP restrictions needed - CNAME registration is done manually by DNS team
+ALLOW_FROM='[]'
 
 usage() {
     cat <<EOF
 Usage: $0 <domain> [output_file]
 
-Pre-register a domain with the corporate ACME-DNS server (auth.vist.is).
+Pre-register a domain with your ACME-DNS server.
 Generates credentials (account.json) for use in Kubernetes.
 
 Arguments:
-  domain          Domain name to register (e.g., nms.example.vist.is)
+  domain          Domain name to register (e.g., nms.example.com)
   output_file     Where to save the account.json (default: .account.json)
 
 Environment:
-  ACMEDNS_API     ACME-DNS server URL (default: https://auth.vist.is)
+  ACMEDNS_API     ACME-DNS server URL (default: https://your-acme-dns-server.example.com)
 
 Example:
-  $0 nms.example.vist.is ./my-nms-account.json
+  $0 nms.example.com ./my-nms-account.json
 
 Output:
   Creates account.json with:
@@ -119,7 +119,7 @@ echo "ACTION REQUIRED: Register CNAME at Corporate DNS"
 echo "=========================================="
 echo ""
 echo "Send the following CNAME to the corporate DNS team:"
-echo "  Email to: <dns-admin@corp>"
+echo "  Email to: <dns-admin@your-org>"
 echo "  Subject:  ACME-DNS CNAME Registration Request"
 echo ""
 echo "  --- BEGIN CNAME REQUEST ---"

@@ -307,6 +307,30 @@ nms() {
         fi
     }
 
+    import_acme_dns_credentials() {
+        local creds_file="$LNMS_DIR/certs/acme-dns-account.json"
+        local secret_name="acme-dns-credentials"
+
+        if [ ! -f "$creds_file" ]; then
+            return 0
+        fi
+
+        if kubectl get secret "$secret_name" -n "$NAMESPACE" >/dev/null 2>&1; then
+            return 0
+        fi
+
+        echo "Importing ACME-DNS credentials from $creds_file..."
+        if kubectl create secret generic "$secret_name" \
+            --from-file="acme-dns-account.json=$creds_file" \
+            -n "$NAMESPACE" >/dev/null 2>&1; then
+            echo "ACME-DNS credentials imported successfully."
+            return 0
+        else
+            echo "Warning: failed to import ACME-DNS credentials. Continuing anyway."
+            return 0
+        fi
+    }
+
     case "$action" in
         "start")
 
@@ -321,6 +345,7 @@ nms() {
             fi
 
             ensure_namespace_exists || return 1
+            import_acme_dns_credentials
 
             if kubectl get deployment librenms -n "$NAMESPACE" >/dev/null 2>&1; then
                 echo "LibreNMS already installed, skipping." 
@@ -377,12 +402,14 @@ nms() {
             else
                 vim -f "$LNMS_DIR/lnms-config.yaml" || return 1
             fi
+            import_acme_dns_credentials
             helm upgrade librenms "$LNMS_DIR/vault/LibreNMS-Helm/" -n "$NAMESPACE" -f "$LNMS_DIR/lnms-config.yaml" || return 1
             ;;
 
         "update")
 
-            echo "Upgrading LibreNMS installation..."  
+            echo "Upgrading LibreNMS installation..."
+            import_acme_dns_credentials
             helm upgrade librenms "$LNMS_DIR/vault/LibreNMS-Helm/" -n "$NAMESPACE" -f "$LNMS_DIR/lnms-config.yaml" || return 1
             ;;
 
@@ -453,7 +480,7 @@ nms() {
                     echo "    nms cert register <domain> [output_file]"
                     echo ""
                     echo "Example:"
-                    echo "    nms cert register nms.example.vist.is ./account.json"
+                    echo "    nms cert register nms.example.com ./account.json"
                     echo ""
                     echo "Default output_file: $LNMS_DIR/certs/acme-dns-account.json"
                     return 1

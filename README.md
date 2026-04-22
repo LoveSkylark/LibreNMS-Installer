@@ -64,6 +64,83 @@ Automatic TLS prerequisites:
 - `Issuer`/`ClusterIssuer`/`Certificate` resources should be managed in LibreNMS-Helm manifests, not in `nms` helper commands.
 - See [HELM-TLS-DEPLOYMENT.md](doc/HELM-TLS-DEPLOYMENT.md) for detailed Helm chart implementation instructions (templates, values, ACME-DNS setup).
 
+## TLS Certificate Deployment Options
+
+### Option 1: Manual Static Certificate
+
+Use pre-generated certificates (self-signed, commercial CA, or wildcard):
+
+1. Generate or obtain your certificate and key files
+2. Deploy to cluster:
+   ```bash
+   nms cert static /path/to/cert.pem /path/to/key.pem
+   ```
+3. Set in `lnms-config.yaml`:
+   ```yaml
+   ingress:
+     https: true
+     tls:
+       existingSecretName: "https-cert"
+   ```
+4. Deploy: `nms start`
+
+**Advantages:** No external dependencies, works offline, simple for wildcard certs
+**Disadvantages:** Manual renewal required before expiry
+
+### Option 2: Let's Encrypt with ACME-DNS Automatic Renewal
+
+Use Let's Encrypt for free certificates with automatic renewal via DNS-01 challenge (ACME-DNS):
+
+#### Prerequisites
+
+1. **Manual DNS CNAME registration required:** Your DNS team must register the ACME-DNS validation CNAME in your DNS zone. This is a one-time setup.
+
+#### Deployment Steps
+
+1. Pre-register your domain with ACME-DNS server:
+   ```bash
+   nms cert register nms.example.com
+   ```
+   Output shows the CNAME to send to your DNS team.
+
+2. **Email CNAME to DNS team** (one-time):
+   ```
+   Domain: nms.example.com
+   CNAME: <fulldomain-from-output>.your-acme-dns-server.example.com
+   ```
+   Wait for confirmation the CNAME is registered.
+
+3. Configure `lnms-config.yaml`:
+   ```yaml
+   ingress:
+     https: true
+     letsEncrypt:
+       enabled: true
+       createIssuer: true
+       email: "admin@example.com"
+       acmeDns:
+         host: "your-acme-dns-server.example.com"
+         accountSecretName: "acme-dns-credentials"
+   ```
+
+4. Deploy:
+   ```bash
+   nms start
+   ```
+   The secret will be auto-imported and cert-manager will handle renewals.
+
+**Advantages:** Free certificates, automatic renewal, no manual intervention after initial CNAME registration
+**Disadvantages:** Requires DNS team coordination for CNAME registration, depends on ACME-DNS service availability
+
+**Important Restriction:** ACME-DNS CNAME registration must be done manually by your DNS team. The `nms cert register` command only generates the credentials and outputs the CNAME to register—it does not update DNS records directly.
+
+### Choosing Between Options
+
+- **Use Manual Static** if: You have wildcard certificates, prefer simplicity, or have infrequent certificate needs
+- **Use ACME-DNS** if: You want automatic renewal, zero downtime on cert expiry, and can coordinate one-time CNAME registration with DNS team
+
+For detailed implementation including Helm templates and architecture, see [HELM-TLS-DEPLOYMENT.md](doc/HELM-TLS-DEPLOYMENT.md).
+
 Automation options for `start` and `edit`:
 
 - `--non-interactive` or `-n` Skip opening `vim`

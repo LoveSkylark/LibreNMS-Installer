@@ -21,15 +21,10 @@ ingress:
     secretName: "https-cert"
   letsEncrypt:
     enabled: false
-    createIssuer: false
-    issuerKind: "ClusterIssuer"
-    issuerName: "letsencrypt-prod"
-    email: ""
-    environment: "production"
-    privateKeySecretName: "letsencrypt-account-key"
-    server:
-      production: "https://acme-v02.api.letsencrypt.org/directory"
-      staging: "https://acme-staging-v02.api.letsencrypt.org/directory"
+    email: "admin@example.domain.com"
+    acmeDns:
+      host: "auth.domain.com"
+      accountSecretName: "acme-dns-credentials"
 
 storage:
   path: "/data/"
