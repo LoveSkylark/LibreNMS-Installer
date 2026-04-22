@@ -566,6 +566,7 @@ nms() {
                 local register_output="${3:-$LNMS_DIR/certs/acme-dns-account.json}"
                 local register_script
                 local register_script_repo
+                local acmedns_host=""
 
                 register_script="$LNMS_DIR/vault/LibreNMS-Installer/bin/acme-dns-register.sh"
                 register_script_repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." >/dev/null 2>&1 && pwd)/bin/acme-dns-register.sh"
@@ -595,6 +596,35 @@ nms() {
                     echo "Error: could not create output directory for $register_output"
                     return 1
                 }
+
+                if [ -z "${ACMEDNS_API:-}" ] && [ -f "$LNMS_DIR/lnms-config.yaml" ]; then
+                    acmedns_host=$(awk '
+                        /^ingress:[[:space:]]*$/ { in_ingress=1; next }
+                        in_ingress && /^[^[:space:]]/ { in_ingress=0 }
+                        in_ingress && /^[[:space:]]{2}letsEncrypt:[[:space:]]*$/ { in_le=1; next }
+                        in_ingress && in_le && /^[[:space:]]{2}[A-Za-z0-9_]+:[[:space:]]*$/ { in_le=0 }
+                        in_le && /^[[:space:]]{4}acmeDns:[[:space:]]*$/ { in_ad=1; next }
+                        in_le && in_ad && /^[[:space:]]{4}[A-Za-z0-9_]+:[[:space:]]*$/ { in_ad=0 }
+                        in_ad && /^[[:space:]]{6}host:[[:space:]]*/ {
+                            val=substr($0, index($0, ":") + 1)
+                            gsub(/^[[:space:]]+|[[:space:]]+$/, "", val)
+                            gsub(/^"|"$/, "", val)
+                            print val
+                            exit
+                        }
+                    ' "$LNMS_DIR/lnms-config.yaml" 2>/dev/null)
+
+                    if [ -n "$acmedns_host" ]; then
+                        case "$acmedns_host" in
+                            http://*|https://*)
+                                export ACMEDNS_API="$acmedns_host"
+                                ;;
+                            *)
+                                export ACMEDNS_API="https://$acmedns_host"
+                                ;;
+                        esac
+                    fi
+                fi
 
                 echo "Starting ACME-DNS pre-registration..."
                 bash "$register_script" "$register_domain" "$register_output"

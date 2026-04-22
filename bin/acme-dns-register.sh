@@ -63,6 +63,12 @@ if ! command -v jq >/dev/null 2>&1; then
     exit 1
 fi
 
+if [[ "$ACMEDNS_API" == "https://your-acme-dns-server.example.com" ]]; then
+    echo "Error: ACMEDNS_API is still set to the placeholder URL."
+    echo "Set ACMEDNS_API or configure ingress.letsEncrypt.acmeDns.host and run via 'nms cert register'."
+    exit 1
+fi
+
 echo "=========================================="
 echo "ACME-DNS Pre-Registration Helper"
 echo "=========================================="
@@ -74,9 +80,15 @@ echo ""
 
 # Call ACME-DNS /register endpoint
 echo "Contacting ACME-DNS server..."
-RESPONSE=$(curl -s -X POST "$ACMEDNS_API/register" \
+if ! RESPONSE=$(curl --silent --show-error --fail \
+    --connect-timeout 10 --max-time 30 \
+    -X POST "$ACMEDNS_API/register" \
     -H "Content-Type: application/json" \
-    -d "{\"allowfrom\": $ALLOW_FROM}")
+    -d "{\"allowfrom\": $ALLOW_FROM}"); then
+    echo "Error: failed to contact ACME-DNS register endpoint: $ACMEDNS_API/register"
+    echo "Check DNS reachability, TLS trust, and ACMEDNS_API value."
+    exit 1
+fi
 
 # Check if request succeeded
 if ! echo "$RESPONSE" | jq . >/dev/null 2>&1; then
