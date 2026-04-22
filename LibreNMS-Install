@@ -15,6 +15,8 @@ K9S_VERSION="${K9S_VERSION:-}"
 HELM_VERSION="${HELM_VERSION:-}"
 DRY_RUN=0
 SKIP_UPGRADE=0
+USE_LOCAL_INSTALLER_REPO=0
+INSTALLER_REPO_PATH="$LNMS_DIR/vault/LibreNMS-Installer"
 
 usage() {
     cat <<'EOF'
@@ -23,6 +25,7 @@ Usage: ./LibreNMS-Install [options]
 Options:
   --dry-run         Print actions without making changes
   --skip-upgrade    Skip apt-get upgrade
+  --use-local-installer Use local LibreNMS-Installer checkout as source and skip GitHub fetch
   --help            Show this help
 EOF
 }
@@ -162,6 +165,9 @@ while [ "$#" -gt 0 ]; do
             ;;
         --skip-upgrade)
             SKIP_UPGRADE=1
+            ;;
+        --use-local-installer)
+            USE_LOCAL_INSTALLER_REPO=1
             ;;
         --help|-h)
             usage
@@ -336,10 +342,21 @@ else
     run_cmd sudo git -C "$LNMS_DIR/vault/LibreNMS-Helm" pull --ff-only origin "$LNMS_HELM_BRANCH"
 fi
 
-if [ ! -d "$LNMS_DIR/vault/LibreNMS-Installer/.git" ]; then
-    run_cmd sudo git clone https://github.com/LoveSkylark/LibreNMS-Installer.git "$LNMS_DIR/vault/LibreNMS-Installer"
+if [ "$USE_LOCAL_INSTALLER_REPO" -eq 1 ]; then
+    LOCAL_INSTALLER_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+    if [ ! -d "$LOCAL_INSTALLER_PATH/profile.d" ] || [ ! -f "$LOCAL_INSTALLER_PATH/config/lnms-config.yaml" ]; then
+        echo "Error: --use-local-installer expects this script to run from a local LibreNMS-Installer checkout."
+        echo "Missing required files under: $LOCAL_INSTALLER_PATH"
+        exit 1
+    fi
+    INSTALLER_REPO_PATH="$LOCAL_INSTALLER_PATH"
+    echo "Using local LibreNMS-Installer repository at $INSTALLER_REPO_PATH (skipping GitHub fetch)."
 else
-    run_cmd sudo git -C "$LNMS_DIR/vault/LibreNMS-Installer" pull --ff-only
+    if [ ! -d "$INSTALLER_REPO_PATH/.git" ]; then
+        run_cmd sudo git clone https://github.com/LoveSkylark/LibreNMS-Installer.git "$INSTALLER_REPO_PATH"
+    else
+        run_cmd sudo git -C "$INSTALLER_REPO_PATH" pull --ff-only
+    fi
 fi
 
 if [ "$ENABLE_WEATHERMAP" = "true" ]; then
@@ -357,7 +374,7 @@ echo ""
 echo "  "
 echo ""
 if [ ! -f "$LNMS_DIR/lnms-config.yaml" ]; then
-    run_cmd sudo cp "$LNMS_DIR/vault/LibreNMS-Installer/config/lnms-config.yaml" "$LNMS_DIR/lnms-config.yaml"
+    run_cmd sudo cp "$INSTALLER_REPO_PATH/config/lnms-config.yaml" "$LNMS_DIR/lnms-config.yaml"
 fi
 if [ "$ENABLE_WEATHERMAP" = "true" ]; then
     if [ ! -d "$LNMS_DIR/librenms/application/weathermap/templates" ]; then
@@ -383,7 +400,7 @@ echo "################## Adding aliases for KUBE & HELM ##################"
 echo ""
 echo "This step sets up convenient aliases for managing Kubernetes and Helm."
 echo ""
-run_cmd sudo cp -r "$LNMS_DIR/vault/LibreNMS-Installer/profile.d"/* /etc/profile.d/
+run_cmd sudo cp -r "$INSTALLER_REPO_PATH/profile.d"/* /etc/profile.d/
 echo ""
 
 
@@ -394,7 +411,7 @@ echo ""
 run_cmd curl -fsSL -o /tmp/librenms-distro https://raw.githubusercontent.com/librenms/librenms-agent/master/snmp/distro
 run_cmd sudo install -m 0755 /tmp/librenms-distro /usr/bin/distro
 run_cmd rm -f /tmp/librenms-distro
-run_cmd sudo cp "$LNMS_DIR/vault/LibreNMS-Installer/snmpd.conf.d/snmp.conf" /etc/snmp/snmpd.conf.d/snmp.conf
+run_cmd sudo cp "$INSTALLER_REPO_PATH/snmpd.conf.d/snmp.conf" /etc/snmp/snmpd.conf.d/snmp.conf
 run_cmd sudo systemctl restart snmpd
 run_cmd sudo systemctl enable snmpd
 echo ""
@@ -404,10 +421,10 @@ if [ -f "/etc/profile.d/nms.sh" ]; then
     # Prefer the installed profile script path.
     # shellcheck disable=SC1091
     source "/etc/profile.d/nms.sh"
-elif [ -f "$LNMS_DIR/vault/LibreNMS-Installer/profile.d/nms.sh" ]; then
+elif [ -f "$INSTALLER_REPO_PATH/profile.d/nms.sh" ]; then
     # Load nms() in this shell so no new terminal is required.
     # shellcheck disable=SC1090
-    source "$LNMS_DIR/vault/LibreNMS-Installer/profile.d/nms.sh"
+    source "$INSTALLER_REPO_PATH/profile.d/nms.sh"
 else
     echo "Warning: nms profile script not found in /etc/profile.d"
 fi
