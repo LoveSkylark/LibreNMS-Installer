@@ -63,13 +63,13 @@ msmtpd:
 smokeping:
   enable: false
   host:
-    FQDN: "smokeping.test.local"
+    FQDN: ""
 
 oxidized:
   enable: false
   host:
     # Use a public DNS name here if you want Oxidized covered by Let's Encrypt.
-    FQDN: "ox.test.local"
+    FQDN: ""
   credentials:
     # token needs to be generated inside LibreNMS. Run "nms edit"
     # to update this information after server is running.
