@@ -1,14 +1,34 @@
-Usefull short cuts:
+Useful shortcuts:
 
 nms start = install LibreNMS
 nms stop = uninstall LibreNMS
 nms edit = change LibreNMS configuration
+nms preflight = run dependency and cluster checks before install/upgrade
 
-nms status = check LibreNMS status and start k9s
-nms cert = add TLS certificate
-nms help = libreNMS cli commands
+nms status = check LibreNMS pod status
+nms monitor = start k9s
+nms cert static <cert> <key> = add TLS certificate (manual/static)
+nms cert register <domain> [output_file] = pre-register ACME-DNS credentials (default output: /data/certs/acme-dns-account.json)
+nms map = generate weather map
+nms help = show this help text
 
-lnms = libreNMS cli commands inside container
+TLS architecture:
+- `nms start/edit/update` does not create cert-manager or issuer resources.
+- `LibreNMS-Install` can bootstrap cert-manager when Let's Encrypt ingress is enabled.
+- Issuer/ClusterIssuer/Certificate resources should be defined in LibreNMS-Helm.
+- See HELM-TLS-DEPLOYMENT.md in this directory for Helm chart templates and implementation guide.
+
+Options for start/edit:
+--non-interactive (-n) = skip opening vim editor
+--no-auto-add-host = skip adding local host via SNMP after install
+
+Environment overrides:
+NMS_NO_EDITOR=1 = default non-interactive mode
+NMS_AUTO_ADD_HOST=0 = disable auto host add by default
+NMS_HOST_IP=<ip> = force host IP used for auto add
+NMS_NAMESPACE=<name> = override namespace (default: librenms)
+
+lnms = run LibreNMS CLI inside the dispatcher pod
 
 k=kubectl
 kl = list resources in current namespace
@@ -24,4 +44,4 @@ hin = install helm chart
 hup = upgrade existing helm release
 hun = uninstall helm release
 
-k9s = manage the kube cluster
+k9s = manage the k3s cluster

@@ -1,26 +1,39 @@
 #########################################################
 ##  Edit this file to configure the monitoring cluster ##
 ##  whole configuration template can be found under:   ##
-##        LibreNMS-Helm/librenms/values.yaml           ##
+##        LibreNMS-Helm/values.yaml                    ##
 #########################################################
 
 global:
   TZ: "Atlantic/Reykjavik"
   company:
-    name: "TEST CO"
+    name: "Example Company"
 
 ingress:
-  # You need to install a cert if your turn on HTTPS:
-  # nms cert <certificate-file> <key-file>
+  # For manual TLS you can create a secret first:
+  # kubectl create secret tls https-cert --cert=<certificate-file> --key=<key-file> --namespace librenms
   https: false
+  className: "traefik"
+  redirectToHttps:
+    enabled: false
+  tls:
+    existingSecretName: ""
+    secretName: "https-cert"
+  letsEncrypt:
+    enabled: false
+    createIssuer: true
+    email: "admin@example.domain.com"
+    acmeDns:
+      host: "auth.domain.com"
+      accountSecretName: "acme-dns-credentials"
 
 storage:
   path: "/data/"
 
 application:
   host:
-    FQDN: "nms.test.local"
-    # volumSize can not be edited after inital install.
+    FQDN: "nms.example.local"
+    # volumeSize cannot be changed after initial install.
     volumeSize: "20Gi"
   SNMPcommunity: 
     - "community-string-1"
@@ -28,12 +41,12 @@ application:
   dispatcher:
     replicas: "1"
 
-# DB info not be changed after inital install.
+# DB info should not be changed after initial install.
 mariadb:
   credentials:
-    rootPassword: "fooRootPassword"
-    user: "foo"
-    password: "bar"
+    rootPassword: "change-me-root-password"
+    user: "librenms"
+    password: "change-me-db-password"
 
 msmtpd:
   enable: false
@@ -41,54 +54,49 @@ msmtpd:
     name: "msmtpd"
     FQDN: "smtp.gmail.com"
     port: "587"
-  from: "foo@gmail.com"
+  from: "noreply@example.com"
   credentials:
     email:
-      user: "foo"
-      password: "bar"   
+      user: "smtp-user"
+      password: "change-me-smtp-password"
 
 smokeping:
   enable: false
   host:
-    FQDN: "smokeping.test.local"
+    FQDN: ""
 
 oxidized:
-  enable: true
-  image: "oxidized/oxidized:0.29.1-12-gdab52d0"
+  enable: false
   host:
-    FQDN: "ox.test.local"
+    # Use a public DNS name here if you want Oxidized covered by Let's Encrypt.
+    FQDN: ""
   credentials:
-    # token needs to be generated inside LibreNMS run "nms edit" 
-    # to update this infromation after server is runnin.
+    # token needs to be generated inside LibreNMS. Run "nms edit"
+    # to update this information after server is running.
     token: "API-token-generated-inside-LIBRE"
     
   group:
     core:
-      user: "deviceadmin"
-      password: "devicepassword"
-    G1:
-      user: ""
-      password: ""
-      string: "/^ox-group-1/"
-    G2:
-      user: ""
-      password: ""
-      string: "/^ox-group-2/"
-    G3:
-      password: ""
-      pass: ""
-      string: "/^ox-group-3/"
-    G4:
-      password: ""
-      pass: ""
-      string: "/^ox-group-4/"
-    G5:
-      user: ""
-      password: ""
-      string: "/^ox-group-5/"
+      user: "oxidized-user"
+      password: "change-me-oxidized-password"
+    # Optional group examples.
+    # Include non-core groups only when user, password, and string are all set.
+    #G1:
+    #  user: "branch-ops-user"
+    #  password: "change-me-branch-password"
+    #  string: "ox-group-1"
+    #  var: ""
+
+    #Telnet:
+    #  user: "dc-ops-user"
+    #  password: "change-me-dc-password"
+    #  string: "ox-group-2"
+    #  var: ""
 
 xmatters:
   enable: false
-  URL: "company.xmatters.com"
-  APIkey: ""
-  APIsecret: ""
+  agent:
+    enable: false
+    URL: "company.xmatters.com"
+    APIkey: ""
+    APIsecret: ""

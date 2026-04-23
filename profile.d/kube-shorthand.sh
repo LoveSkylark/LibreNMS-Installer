@@ -1,9 +1,10 @@
 #!/bin/bash
 alias k="kubectl"
+alias kl="kubectl get all"
 
 kn() {
-    if [ "$1" != "" ]; then
-            kubectl config set-context --current --namespace=$1
+    if [ -n "$1" ]; then
+        kubectl config set-context --current --namespace="$1"
     else
             echo -e "Error, please provide a valid Namespace"
     fi
@@ -22,8 +23,8 @@ kall() {
 }
 
 kbash() {
-    if [ "$1" != "" ]; then
-            kubectl exec --stdin --tty $1 -- /bin/bash
+    if [ -n "$1" ]; then
+        kubectl exec --stdin --tty "$1" -- /bin/bash
     else
             echo -e "Error, please provide a pod name"
     fi
