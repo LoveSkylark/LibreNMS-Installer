@@ -215,6 +215,41 @@ nms() {
         hostname -I 2>/dev/null | awk '{for (i=1; i<=NF; i++) if ($i !~ /^127\./) {print $i; exit}}'
     }
 
+    extract_first_ipv4() {
+        awk '/Your IP:/ {print $3; exit}'
+    }
+
+    get_external_ip_hint() {
+        local probe_output
+        local external_ip
+
+        if ! command -v wget >/dev/null 2>&1; then
+            return 1
+        fi
+
+        probe_output=$(wget -qO- portquiz.net:80 2>/dev/null || true)
+        external_ip=$(printf '%s\n' "$probe_output" | extract_first_ipv4)
+        if [ -z "$external_ip" ]; then
+            external_ip=$(printf '%s\n' "$probe_output" | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}' | head -n 1)
+        fi
+        if [ -n "$external_ip" ]; then
+            echo "$external_ip"
+            return 0
+        fi
+
+        probe_output=$(wget -qO- portquiz.net:443 2>/dev/null || true)
+        external_ip=$(printf '%s\n' "$probe_output" | extract_first_ipv4)
+        if [ -z "$external_ip" ]; then
+            external_ip=$(printf '%s\n' "$probe_output" | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}' | head -n 1)
+        fi
+        if [ -n "$external_ip" ]; then
+            echo "$external_ip"
+            return 0
+        fi
+
+        return 1
+    }
+
     get_fqdn_from_values() {
         awk '
             /^[[:space:]]*application:[[:space:]]*$/ { in_app=1; next }
@@ -657,6 +692,10 @@ nms() {
                 local register_script
                 local register_script_repo
                 local acmedns_host=""
+                local register_log
+                local host_ip
+                local external_ip
+                local acme_fulldomain
 
                 register_script="$LNMS_DIR/vault/LibreNMS-Installer/bin/acme-dns-register.sh"
                 register_script_repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." >/dev/null 2>&1 && pwd)/bin/acme-dns-register.sh"
@@ -718,8 +757,47 @@ nms() {
                 fi
 
                 echo "Starting ACME-DNS pre-registration..."
-                bash "$register_script" "$register_domain" "$register_output"
-                return $?
+                if ! register_log=$(bash "$register_script" "$register_domain" "$register_output" 2>&1); then
+                    echo "$register_log"
+                    return 1
+                fi
+
+                host_ip=$(get_host_ip || true)
+                external_ip=$(get_external_ip_hint || true)
+
+                if command -v jq >/dev/null 2>&1; then
+                    acme_fulldomain=$(jq -r --arg domain "$register_domain" '.[$domain].fulldomain // empty' "$register_output" 2>/dev/null || true)
+                    if [ -z "$acme_fulldomain" ]; then
+                        acme_fulldomain=$(jq -r 'to_entries[0].value.fulldomain // empty' "$register_output" 2>/dev/null || true)
+                    fi
+                fi
+
+                if [ -z "$acme_fulldomain" ]; then
+                    acme_fulldomain=$(awk -F '"' '/"fulldomain"[[:space:]]*:/ { print $4; exit }' "$register_output" 2>/dev/null)
+                fi
+
+                echo "ACME-DNS registration completed."
+                echo ""
+                echo "These settings need to be added to your DNS:"
+
+                if [ -n "$host_ip" ] && [ -n "$external_ip" ]; then
+                    echo "DNS: $register_domain $host_ip (or $external_ip if you are exposing the server to the internet)"
+                elif [ -n "$host_ip" ]; then
+                    echo "DNS: $register_domain $host_ip"
+                else
+                    echo "DNS: $register_domain <host-ip>"
+                fi
+
+                if [ -n "$acme_fulldomain" ]; then
+                    echo "CNAME: _acme-challenge.$register_domain $acme_fulldomain"
+                else
+                    echo "CNAME: _acme-challenge.$register_domain <acme-dns-fulldomain>"
+                    echo "Warning: unable to parse fulldomain from $register_output"
+                fi
+
+                echo ""
+                echo "Credentials saved to: $register_output"
+                return 0
             fi
 
             if [ "${1:-}" = "static" ]; then
