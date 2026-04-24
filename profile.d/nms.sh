@@ -754,6 +754,23 @@ nms() {
             else
                 echo "Skipping automatic host add (--no-auto-add-host)."
             fi
+
+            echo ""
+            echo "=========================================="
+            echo "LibreNMS installation complete!"
+            echo "=========================================="
+            echo ""
+            echo "If the 'nms' command is not yet available in your current shell,"
+            echo "open a new terminal session or run:"
+            echo ""
+            echo "  source $(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)/$(basename "${BASH_SOURCE[0]}")"
+            echo ""
+            echo "Then you can use:"
+            echo "  nms status          # Check cluster status"
+            echo "  nms monitor         # Open k9s dashboard"
+            echo "  nms edit            # Edit configuration and upgrade"
+            echo "  nms stop            # Stop LibreNMS cluster"
+            echo ""
             ;;
         
         "stop")
