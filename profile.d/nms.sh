@@ -219,6 +219,119 @@ nms() {
         awk '/Your IP:/ {print $3; exit}'
     }
 
+    base_domain_from_domain() {
+        local domain="$1"
+        local parts
+
+        parts=(${domain//./ })
+        if [ ${#parts[@]} -ge 2 ]; then
+            echo "${parts[-2]}.${parts[-1]}"
+            return 0
+        fi
+
+        echo "$domain"
+    }
+
+    normalize_acmedns_api() {
+        local host_or_url="$1"
+
+        if [ -z "$host_or_url" ]; then
+            return 1
+        fi
+
+        case "$host_or_url" in
+            http://*|https://*)
+                echo "$host_or_url"
+                ;;
+            *)
+                echo "https://$host_or_url"
+                ;;
+        esac
+    }
+
+    acmedns_host_matches_domain() {
+        local api_url="$1"
+        local base_domain="$2"
+        local host
+
+        host=$(printf '%s' "$api_url" | sed -E 's#^https?://##; s#/.*$##; s#:[0-9]+$##' | tr '[:upper:]' '[:lower:]')
+        base_domain=$(printf '%s' "$base_domain" | tr '[:upper:]' '[:lower:]')
+
+        case "$host" in
+            "$base_domain"|*".$base_domain")
+                return 0
+                ;;
+        esac
+
+        return 1
+    }
+
+    is_placeholder_acmedns() {
+        local url="$1"
+        case "$url" in
+            ""|"http://auth.domain.com"|"https://auth.domain.com"|"https://your-acme-dns-server.example.com")
+                return 0
+                ;;
+        esac
+        return 1
+    }
+
+    acmedns_endpoint_responds() {
+        local api_url="$1"
+        local code
+
+        if command -v curl >/dev/null 2>&1; then
+            code=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+                --connect-timeout 3 --max-time 6 "$api_url/register" 2>/dev/null || true)
+            case "$code" in
+                200|201|202|204|400|401|403|404|405)
+                    return 0
+                    ;;
+            esac
+            return 1
+        fi
+
+        if command -v wget >/dev/null 2>&1; then
+            wget --spider --timeout=6 "$api_url/register" >/dev/null 2>&1
+            return $?
+        fi
+
+        return 1
+    }
+
+    resolve_acmedns_api_for_domain() {
+        local domain="$1"
+        local configured_host="$2"
+        local base_domain
+        local candidate
+        local normalized
+        local candidates=()
+
+        base_domain=$(base_domain_from_domain "$domain")
+
+        if [ -n "$configured_host" ]; then
+            normalized=$(normalize_acmedns_api "$configured_host")
+            if [ -n "$normalized" ] \
+                && ! is_placeholder_acmedns "$normalized" \
+                && acmedns_host_matches_domain "$normalized" "$base_domain"; then
+                candidates+=("$normalized")
+            fi
+        fi
+
+        candidates+=("https://auth.${base_domain}")
+        candidates+=("https://acme-dns.${base_domain}")
+        candidates+=("https://dns-api.${base_domain}")
+
+        for candidate in "${candidates[@]}"; do
+            if acmedns_endpoint_responds "$candidate"; then
+                echo "$candidate"
+                return 0
+            fi
+        done
+
+        return 1
+    }
+
     get_external_ip_hint() {
         local probe_output
         local external_ip
@@ -737,6 +850,8 @@ nms() {
 
             if [ "${1:-}" = "register" ]; then
                 local register_domain="${2:-}"
+                local register_acmedns_override="${3:-}"
+                local register_output_arg="${4:-}"
                 local register_output
                 local register_script
                 local register_script_repo
@@ -745,6 +860,7 @@ nms() {
                 local host_ip
                 local external_ip
                 local acme_fulldomain
+                local resolved_acmedns_api
 
                 register_script="$LNMS_DIR/vault/LibreNMS-Installer/bin/acme-dns-register.sh"
                 register_script_repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." >/dev/null 2>&1 && pwd)/bin/acme-dns-register.sh"
@@ -761,22 +877,36 @@ nms() {
 
                 if [ -z "$register_domain" ]; then
                     echo "Usage:"
-                    echo "    nms cert register <domain> [output_file]"
+                    echo "    nms cert register <domain> [acme_dns_host] [output_file]"
                     echo ""
                     echo "Example:"
                     echo "    nms cert register nms.example.com"
+                    echo "    nms cert register nms.example.com auth.example.com"
                     echo "    nms cert register nms.example.com /custom/path/account.json"
+                    echo "    nms cert register nms.example.com auth.example.com /custom/path/account.json"
                     echo ""
                     echo "Default: saves to $LNMS_DIR/certs/acme-dns-account.<domain>.json"
                     echo "         and merges all domain files into $LNMS_DIR/certs/acme-dns-account.json"
                     return 1
                 fi
 
+                # Backward-compatible argument handling:
+                # nms cert register <domain> <output_file>
+                # nms cert register <domain> <acme_dns_host> [output_file]
+                if [ -n "$register_acmedns_override" ] && [ -z "$register_output_arg" ]; then
+                    case "$register_acmedns_override" in
+                        */*|*.json)
+                            register_output_arg="$register_acmedns_override"
+                            register_acmedns_override=""
+                            ;;
+                    esac
+                fi
+
                 # Use domain-specific filename by default
-                if [ -z "${3:-}" ]; then
+                if [ -z "$register_output_arg" ]; then
                     register_output="$LNMS_DIR/certs/acme-dns-account.${register_domain}.json"
                 else
-                    register_output="${3}"
+                    register_output="$register_output_arg"
                 fi
 
                 mkdir -p "$(dirname "$register_output")" || {
@@ -784,7 +914,7 @@ nms() {
                     return 1
                 }
 
-                if [ -z "${ACMEDNS_API:-}" ] && [ -f "$LNMS_DIR/lnms-config.yaml" ]; then
+                if [ -f "$LNMS_DIR/lnms-config.yaml" ]; then
                     acmedns_host=$(awk '
                         /^ingress:[[:space:]]*$/ { in_ingress=1; next }
                         in_ingress && /^[^[:space:]]/ { in_ingress=0 }
@@ -801,16 +931,30 @@ nms() {
                             exit
                         }
                     ' "$LNMS_DIR/lnms-config.yaml" 2>/dev/null)
+                fi
 
-                    if [ -n "$acmedns_host" ]; then
-                        case "$acmedns_host" in
-                            http://*|https://*)
-                                export ACMEDNS_API="$acmedns_host"
-                                ;;
-                            *)
-                                export ACMEDNS_API="https://$acmedns_host"
-                                ;;
-                        esac
+                if [ -n "$register_acmedns_override" ]; then
+                    resolved_acmedns_api=$(normalize_acmedns_api "$register_acmedns_override")
+                    export ACMEDNS_API="$resolved_acmedns_api"
+                    echo "ACME-DNS found (override): $ACMEDNS_API"
+                else
+                    if resolved_acmedns_api=$(resolve_acmedns_api_for_domain "$register_domain" "$acmedns_host"); then
+                        export ACMEDNS_API="$resolved_acmedns_api"
+                        echo "ACME-DNS found (responding): $ACMEDNS_API"
+                    else
+                        if [ -n "$acmedns_host" ]; then
+                            export ACMEDNS_API="$(normalize_acmedns_api "$acmedns_host")"
+                            echo "Warning: no responding candidate found. Falling back to configured host: $ACMEDNS_API"
+                        else
+                            echo "Error: no responding ACME-DNS endpoint found for $register_domain"
+                            echo "Tried, in order:"
+                            echo "  1) ingress.letsEncrypt.acmeDns.host from lnms-config.yaml"
+                            echo "  2) auth.$(base_domain_from_domain "$register_domain")"
+                            echo "  3) acme-dns.$(base_domain_from_domain "$register_domain")"
+                            echo "  4) dns-api.$(base_domain_from_domain "$register_domain")"
+                            echo "You can override manually: nms cert register <domain> <acme_dns_host> [output_file]"
+                            return 1
+                        fi
                     fi
                 fi
 
@@ -868,7 +1012,7 @@ nms() {
                 echo "Usage:"
                 echo "    nms cert static <cert> <key>"
                 echo "    nms cert check"
-                echo "    nms cert register <domain> [output_file]"
+                echo "    nms cert register <domain> [acme_dns_host] [output_file]"
                 return 1
             elif [ -n "${1:-}" ] && [ -n "${2:-}" ]; then
                 echo "Error: static cert mode now requires the explicit subcommand."
@@ -884,7 +1028,7 @@ nms() {
                 echo ""
                 echo "ACME-DNS pre-registration option:"
                 echo "    nms cert check"
-                echo "    nms cert register <domain> [output_file]"
+                echo "    nms cert register <domain> [acme_dns_host] [output_file]"
                 echo "    Default output_file: $LNMS_DIR/certs/acme-dns-account.json"
                 return 1
             fi
