@@ -452,11 +452,60 @@ nms() {
         kubectl annotate namespace "$NAMESPACE" meta.helm.sh/release-namespace="$NAMESPACE" --overwrite >/dev/null || return 1
     }
 
+    merge_acme_dns_credentials() {
+        local certs_dir="$LNMS_DIR/certs"
+        local merged_file="$certs_dir/acme-dns-account.json"
+        local domain_files
+        local combined_json="{}"
+        local first=1
+
+        if [ ! -d "$certs_dir" ]; then
+            return 0
+        fi
+
+        # Find all domain-specific acme files
+        domain_files=$(find "$certs_dir" -maxdepth 1 -name 'acme-dns-account.*.json' -type f 2>/dev/null | sort)
+
+        if [ -z "$domain_files" ]; then
+            return 0
+        fi
+
+        # Merge all domain files
+        if command -v jq >/dev/null 2>&1; then
+            for domain_file in $domain_files; do
+                if [ -f "$domain_file" ]; then
+                    combined_json=$(jq -s '.[0] * .[1]' <(echo "$combined_json") "$domain_file" 2>/dev/null || echo "$combined_json")
+                fi
+            done
+            echo "$combined_json" > "$merged_file"
+            chmod 600 "$merged_file"
+            return 0
+        fi
+
+        # Fallback for systems without jq: simple text concatenation (less ideal)
+        echo "{" > "$merged_file"
+        for domain_file in $domain_files; do
+            if [ -f "$domain_file" ]; then
+                # Extract the inner content between first { and last }
+                sed '1d;$d' "$domain_file" | sed '$d' >> "$merged_file"
+                echo "," >> "$merged_file"
+            fi
+        done
+        # Remove trailing comma and close
+        sed -i '$ s/,$//' "$merged_file"
+        echo "}" >> "$merged_file"
+        chmod 600 "$merged_file"
+        return 0
+    }
+
     import_acme_dns_credentials() {
         local creds_file="$LNMS_DIR/certs/acme-dns-account.json"
         local secret_name="acme-dns-credentials"
         local issuer_kind="ClusterIssuer"
         local cfg="$LNMS_DIR/lnms-config.yaml"
+
+        # Merge domain-specific files into main file
+        merge_acme_dns_credentials || true
 
         ensure_secret_in_namespace() {
             local target_ns="$1"
@@ -688,7 +737,7 @@ nms() {
 
             if [ "${1:-}" = "register" ]; then
                 local register_domain="${2:-}"
-                local register_output="${3:-$LNMS_DIR/certs/acme-dns-account.json}"
+                local register_output
                 local register_script
                 local register_script_repo
                 local acmedns_host=""
@@ -715,10 +764,19 @@ nms() {
                     echo "    nms cert register <domain> [output_file]"
                     echo ""
                     echo "Example:"
-                    echo "    nms cert register nms.example.com ./account.json"
+                    echo "    nms cert register nms.example.com"
+                    echo "    nms cert register nms.example.com /custom/path/account.json"
                     echo ""
-                    echo "Default output_file: $LNMS_DIR/certs/acme-dns-account.json"
+                    echo "Default: saves to $LNMS_DIR/certs/acme-dns-account.<domain>.json"
+                    echo "         and merges all domain files into $LNMS_DIR/certs/acme-dns-account.json"
                     return 1
+                fi
+
+                # Use domain-specific filename by default
+                if [ -z "${3:-}" ]; then
+                    register_output="$LNMS_DIR/certs/acme-dns-account.${register_domain}.json"
+                else
+                    register_output="${3}"
                 fi
 
                 mkdir -p "$(dirname "$register_output")" || {
@@ -776,6 +834,9 @@ nms() {
                     acme_fulldomain=$(awk -F '"' '/"fulldomain"[[:space:]]*:/ { print $4; exit }' "$register_output" 2>/dev/null)
                 fi
 
+                # Merge all domain files into main acme-dns-account.json
+                merge_acme_dns_credentials || true
+
                 echo "ACME-DNS registration completed."
                 echo ""
                 echo "These settings need to be added to your DNS:"
@@ -796,7 +857,8 @@ nms() {
                 fi
 
                 echo ""
-                echo "Credentials saved to: $register_output"
+                echo "Domain credentials saved to: $register_output"
+                echo "Merged credentials saved to: $LNMS_DIR/certs/acme-dns-account.json"
                 return 0
             fi
 
