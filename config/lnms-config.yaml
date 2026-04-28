@@ -107,12 +107,14 @@ saml:
   # Supported providers: "github", "microsoft", "okta", "saml2"
   provider: ""
   # Redirect login page to first configured provider (bool)
-  redirect_login: false
+  redirect: false
+  # Allow automatic local user registration via provider (bool)
+  register: false
   # Default role for authenticated users: none, normal, global-read, admin
   default_role: "global-read"
   client_id: ""
   client_secret: ""
-  redirect: ""  # OAuth callback URL (GitHub/Microsoft/Okta), e.g., https://nms.example.com/auth/microsoft/callback
+  callback: ""  # OAuth callback URL (GitHub/Microsoft/Okta), e.g., https://nms.example.com/auth/microsoft/callback
   # GitHub: no extra provider-specific fields required
   tenant: ""  # Microsoft ONLY: tenant id/domain, e.g., common or contoso.onmicrosoft.com
   base_url: ""  # Okta ONLY: instance URL, e.g., https://dev-123456.okta.com
