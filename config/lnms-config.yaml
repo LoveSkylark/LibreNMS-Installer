@@ -38,6 +38,9 @@ application:
     - "community-string-2"
   dispatcher:
     replicas: "1"
+  jobsInstall:
+    keepOnSuccess: false
+    debug: false
 
 # DB info should not be changed after initial install.
 mariadb:
@@ -103,11 +106,14 @@ saml:
   enable: false
   # Supported providers: "github", "microsoft", "okta", "saml2"
   provider: ""
+  # Redirect login page to first configured provider (bool)
+  redirect_login: false
   # Default role for authenticated users: none, normal, global-read, admin
   default_role: "global-read"
   client_id: ""
   client_secret: ""
-  redirect: ""
+  redirect: ""  # OAuth callback URL (GitHub/Microsoft/Okta), e.g., https://nms.example.com/auth/microsoft/callback
+  # GitHub: no extra provider-specific fields required
   tenant: ""  # Microsoft ONLY: tenant id/domain, e.g., common or contoso.onmicrosoft.com
   base_url: ""  # Okta ONLY: instance URL, e.g., https://dev-123456.okta.com
   # Claim field for providers that deliver roles/groups under token claims
@@ -122,7 +128,7 @@ saml:
     # librenms-read:
     #   - "global-read"
   saml2:
-    metadata: ""  # IdP metadata URL or XML content
+    metadata: ""  # SAML2 ONLY: IdP metadata URL or XML content
   # Provider-specific scopes
   microsoft:
     scopes:
