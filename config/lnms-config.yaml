@@ -108,6 +108,7 @@ saml:
   client_id: ""
   client_secret: ""
   redirect: ""
+  tenant: ""  # Microsoft ONLY: tenant id/domain, e.g., common or contoso.onmicrosoft.com
   base_url: ""  # Okta ONLY: instance URL, e.g., https://dev-123456.okta.com
   # Claim field for providers that deliver roles/groups under token claims
   # Microsoft example: claim_field: "roles"
