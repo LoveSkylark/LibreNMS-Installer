@@ -33,6 +33,10 @@ application:
     FQDN: "nms.example.local"
     # volumeSize cannot be changed after initial install.
     volumeSize: "20Gi"
+  lnms:
+    # Installed by lnms-app container startup from this value.
+    # Example for Microsoft OAuth: "socialiteproviders/microsoft"
+    installPlugins: ""
   SNMPcommunity: 
     - "community-string-1"
     - "community-string-2"
