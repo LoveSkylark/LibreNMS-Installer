@@ -25,8 +25,6 @@ ingress:
     email: "admin@example.domain.com"
     acmeDns:
       host: "auth.domain.com"
-      accountSecretName: "acme-dns-credentials"
-
 storage:
   path: "/data/"
 
@@ -100,3 +98,37 @@ xmatters:
     URL: "company.xmatters.com"
     APIkey: ""
     APIsecret: ""
+
+saml:
+  enable: false
+  # Supported providers: "github", "microsoft", "okta", "saml2"
+  provider: ""
+  # Default role for authenticated users: none, normal, global-read, admin
+  default_role: "global-read"
+  client_id: ""
+  client_secret: ""
+  redirect: ""
+  base_url: ""  # Okta ONLY: instance URL, e.g., https://dev-123456.okta.com
+  # Claim field for providers that deliver roles/groups under token claims
+  # Microsoft example: claim_field: "roles"
+  claim_field: ""
+  # Claims mapping: maps returned claim values to LibreNMS roles
+  # Example: claim value "librenms-admin" -> admin role, "librenms-read" -> global-read role
+  claims: {}
+    # Example for Microsoft groups:
+    # librenms-admin:
+    #   - "admin"
+    # librenms-read:
+    #   - "global-read"
+  saml2:
+    metadata: ""  # IdP metadata URL or XML content
+  # Provider-specific scopes
+  microsoft:
+    scopes:
+      - "openid"
+      - "profile"
+      - "email"
+  github:
+    scopes: []
+  okta:
+    scopes: []
