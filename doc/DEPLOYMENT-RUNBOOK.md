@@ -232,6 +232,8 @@ Supported providers:
 - `okta`
 - `saml2`
 
+Other external auth models are also supported in this installer stack (for example RADIUS, Active Directory/LDAP), but are configured separately from the `saml:` block.
+
 Base example:
 
 ```yaml
@@ -286,6 +288,9 @@ nms update
 - `oxidized.group.core.user`
 - `oxidized.group.core.password`
 
+Optional password groups are supported (for example `G1`, `Telnet`, or your own names) under `oxidized.group.*`.
+Group selection is driven by device metadata in LibreNMS, using matching strings in device Note/Description (and custom properties where used in your environment).
+
 1. Apply and restart oxidized pod if needed:
 
 ```bash
@@ -296,7 +301,12 @@ k9s
 
 ## 11. xMatters Setup
 
-If `xmatters.enable=true` and `xmatters.agent.enable=true`, transporter is deployed with the stack.
+xMatters integration can run in two modes:
+
+- Agent mode: `xmatters.enable=true` and `xmatters.agent.enable=true`
+- Non-agent mode: `xmatters.enable=true` and `xmatters.agent.enable=false`
+
+In both modes, you can re-run deployment safely with `nms update` after changing xMatters values.
 
 Configure:
 
