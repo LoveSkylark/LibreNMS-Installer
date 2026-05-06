@@ -124,7 +124,7 @@ saml:
   base_url: ""  # Okta ONLY: instance URL, e.g., https://dev-123456.okta.com
   # Claim field for providers that deliver roles/groups under token claims
   # Microsoft example: claim_field: "roles"
-  claim_field: ""
+  claim_field: "roles"
   # Claims mapping: maps returned claim values to LibreNMS roles
   # Example: claim value "librenms-admin" -> admin role, "librenms-read" -> global-read role
   claims: {}

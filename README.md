@@ -37,6 +37,8 @@ nms start
 nms status
 ```
 
+For a full end-to-end deployment workflow (including updated `nms`, TLS/cert handling, and SAML/social auth setup), see [doc/DEPLOYMENT-RUNBOOK.md](doc/DEPLOYMENT-RUNBOOK.md).
+
 ## Important paths
 
 - Main data directory: `${LNMS_DIR:-/data}`

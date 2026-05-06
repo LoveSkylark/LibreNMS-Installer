@@ -3,20 +3,27 @@ Useful shortcuts:
 nms start = install LibreNMS
 nms stop = uninstall LibreNMS
 nms edit = change LibreNMS configuration
+nms update = apply Helm upgrade using current values file
 nms preflight = run dependency and cluster checks before install/upgrade
 
 nms status = check LibreNMS pod status
 nms monitor = start k9s
 nms cert static <cert> <key> = add TLS certificate (manual/static)
-nms cert register <domain> [output_file] = pre-register ACME-DNS credentials (default output: /data/certs/acme-dns-account.json)
+nms cert check = validate ACME-DNS registration helper and current config
+nms cert register <domain> [acme_dns_host] [output_file] = pre-register ACME-DNS credentials
 nms map = generate weather map
 nms help = show this help text
 
 TLS architecture:
-- `nms start/edit/update` does not create cert-manager or issuer resources.
-- `LibreNMS-Install` can bootstrap cert-manager when Let's Encrypt ingress is enabled.
+- `nms start/edit/update` auto-checks `lnms-config.yaml` and bootstraps cert-manager when required by values.
+- Issuer/ClusterIssuer/Certificate resources are rendered by LibreNMS-Helm templates.
+- ACME-DNS credentials are merged from domain files and imported into needed namespaces automatically.
 - Issuer/ClusterIssuer/Certificate resources should be defined in LibreNMS-Helm.
 - See HELM-TLS-DEPLOYMENT.md in this directory for Helm chart templates and implementation guide.
+
+ACME-DNS register defaults:
+- Per-domain output: /data/certs/acme-dns-account.<domain>.json
+- Merged output used for secret import: /data/certs/acme-dns-account.json
 
 Options for start/edit:
 --non-interactive (-n) = skip opening vim editor
