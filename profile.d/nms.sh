@@ -1023,6 +1023,52 @@ nms() {
                 return 0
             fi
 
+            if [ "${1:-}" = "backup" ]; then
+                local backup_file="${2:-$LNMS_DIR/certs/https-cert.backup.$(date +%Y%m%d).yaml}"
+
+                if ! kubectl -n "$NAMESPACE" get secret https-cert >/dev/null 2>&1; then
+                    echo "Error: secret https-cert not found in namespace $NAMESPACE"
+                    return 1
+                fi
+
+                echo "Backing up TLS secret https-cert from namespace $NAMESPACE..."
+                # Subshell keeps umask/pipefail out of the caller's shell; namespace is stripped so restore can target any namespace
+                if ! ( set -o pipefail; umask 077 && mkdir -p "$(dirname "$backup_file")" \
+                    && kubectl -n "$NAMESPACE" get secret https-cert -o yaml \
+                    | grep -vE '^[[:space:]]+(resourceVersion|uid|creationTimestamp|namespace):' > "$backup_file" ); then
+                    echo "Error: backup failed."
+                    rm -f "$backup_file"
+                    return 1
+                fi
+
+                echo "Backup saved to: $backup_file"
+                return 0
+            fi
+
+            if [ "${1:-}" = "restore" ]; then
+                local restore_file="${2:-}"
+
+                if [ -z "$restore_file" ]; then
+                    restore_file=$(ls -1t "$LNMS_DIR"/certs/https-cert.backup.*.yaml 2>/dev/null | head -n1)
+                fi
+
+                if [ -z "$restore_file" ] || [ ! -f "$restore_file" ]; then
+                    echo "Error: no backup file found."
+                    echo "Usage:"
+                    echo "    nms cert restore [backup_file]"
+                    echo "Default: newest $LNMS_DIR/certs/https-cert.backup.*.yaml"
+                    return 1
+                fi
+
+                ensure_namespace_exists || return 1
+                ensure_namespace_helm_metadata || return 1
+
+                echo "Restoring TLS secret https-cert from $restore_file into namespace $NAMESPACE..."
+                kubectl apply -n "$NAMESPACE" -f "$restore_file" || return 1
+                echo "TLS secret https-cert restored in namespace $NAMESPACE"
+                return 0
+            fi
+
             if [ "${1:-}" = "static" ]; then
                 shift
             elif [ -n "${1:-}" ] && [ -z "${2:-}" ]; then
@@ -1030,6 +1076,8 @@ nms() {
                 echo "    nms cert static <cert> <key>"
                 echo "    nms cert check"
                 echo "    nms cert register <domain> [acme_dns_host] [output_file]"
+                echo "    nms cert backup [backup_file]"
+                echo "    nms cert restore [backup_file]"
                 return 1
             elif [ -n "${1:-}" ] && [ -n "${2:-}" ]; then
                 echo "Error: static cert mode now requires the explicit subcommand."
@@ -1047,6 +1095,11 @@ nms() {
                 echo "    nms cert check"
                 echo "    nms cert register <domain> [acme_dns_host] [output_file]"
                 echo "    Default output_file: $LNMS_DIR/certs/acme-dns-account.json"
+                echo ""
+                echo "Backup/restore existing https-cert secret:"
+                echo "    nms cert backup [backup_file]"
+                echo "    nms cert restore [backup_file]"
+                echo "    Default backup_file: $LNMS_DIR/certs/https-cert.backup.<YYYYMMDD>.yaml"
                 return 1
             fi
 

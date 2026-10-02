@@ -11,6 +11,8 @@ nms monitor = start k9s
 nms cert static <cert> <key> = add TLS certificate (manual/static)
 nms cert check = validate ACME-DNS registration helper and current config
 nms cert register <domain> [acme_dns_host] [output_file] = pre-register ACME-DNS credentials
+nms cert backup [backup_file] = back up https-cert secret (default /data/certs/https-cert.backup.<YYYYMMDD>.yaml)
+nms cert restore [backup_file] = restore https-cert secret (default newest backup in /data/certs)
 nms map = generate weather map
 nms help = show this help text
 
