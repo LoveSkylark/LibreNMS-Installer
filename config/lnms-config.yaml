@@ -34,6 +34,13 @@ application:
     # volumeSize cannot be changed after initial install.
     volumeSize: "20Gi"
   lnms:
+    pollerModules:
+      nac: true
+      isis: false
+      xdsl: false
+      slas: false
+      arp-table: false
+      port-security: false
     # Installed by lnms-app container startup from this value.
     # Example for Microsoft OAuth: "socialiteproviders/microsoft"
     installPlugins: ""
